@@ -1,0 +1,70 @@
+{	
+	"pages": [ 
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "Reciter"
+			}
+		},
+		{
+			"path": "pages/wordlist/index",
+			"style": {
+				"navigationBarTitleText": "单词列表"
+			}
+		},
+		{
+			"path": "pages/add/index",
+			"style": {
+				"navigationBarTitleText": "添加单词"
+			}
+		},
+		{
+			"path": "pages/settings/index",
+			"style": {
+				"navigationBarTitleText": "设置"
+			}
+		},
+		{
+			"path": "pages/worddetail/index",
+			"style": {
+				"navigationBarTitleText": "单词详情"
+			}
+		},
+		{
+			"path": "pages/errorbook/index",
+			"style": {
+				"navigationBarTitleText": "错题本"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "Reciter",
+		"navigationBarBackgroundColor": "#F8F8F8",
+		"backgroundColor": "#F8F8F8"
+	},
+	"tabBar": {
+		"color": "#999",
+		"selectedColor": "#4F46E5",
+		"backgroundColor": "#ffffff",
+		"borderStyle": "black",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "首页"
+			},
+			{
+				"pagePath": "pages/wordlist/index",
+				"text": "单词库"
+			},
+			{
+				"pagePath": "pages/errorbook/index",
+				"text": "错题本"
+			},
+			{
+				"pagePath": "pages/add/index",
+				"text": "添加"
+			}
+		]
+	}
+}
