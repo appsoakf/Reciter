@@ -15,7 +15,7 @@ android/harmony半血版，其中android版本 >= 7.0
 
 # How to use
 
-dist/release/apk路径下有一个.apk文件，下载到手机即可使用
+有一个.apk文件，下载到手机即可使用
 
 # Features
 
