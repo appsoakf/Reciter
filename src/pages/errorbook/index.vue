@@ -150,18 +150,18 @@
     <loading-error 
       :show="showError" 
       :message="errorMessage" 
-      @retry="handleRetry"
-      @dismiss="dismissError"
+      @retry="loadErrorBook"
+      @dismiss="showError = false"
     />
   </view>
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import * as ErrorBook from '@/services/errorbook';
 import utils from '@/utils/common';
-import LoadingError from '@/components/loading-error.vue';
+import LoadingError from '@/components/LoadingError.vue';
 
 export default {
   components: {
@@ -501,19 +501,52 @@ export default {
     };
 
     // 错误重试处理
-    const handleRetry = () => {
+    const loadErrorBook = () => {
       showError.value = false;
       loadData();
-    };
-
-    // 解除错误状态但不重新加载数据
-    const dismissError = () => {
-      showError.value = false;
     };
 
     // 初始化
     onMounted(() => {
       loadData();
+      
+      // 添加对refresh-errorbook事件的监听，用于接收清空数据和导入数据的通知
+      uni.$on('refresh-errorbook', (event) => {
+        console.log('收到错题本刷新事件:', event);
+        
+        // 立即刷新数据
+        loadData();
+        
+        // 如果是清空操作，则重置UI状态
+        if (event && event.cleared === true) {
+          console.log('检测到清空数据事件，重置所有UI状态');
+          // 关闭可能打开的弹窗
+          showAddModal.value = false;
+          showEditModal.value = false;
+          showDetailModal.value = false;
+          showDeleteModal.value = false;
+          // 清空搜索
+          searchText.value = '';
+        }
+      });
+      
+      // 添加对错题计数更新事件的监听
+      uni.$on('errors-count-updated', (event) => {
+        console.log('收到错题数量更新事件:', event);
+        
+        // 如果计数为0，可能是数据被清空，立即刷新
+        if (event && event.count === 0) {
+          console.log('错题数量为0，可能是数据被清空，立即刷新');
+          loadData();
+        }
+      });
+    });
+    
+    // 组件销毁前清理事件监听器
+    onBeforeUnmount(() => {
+      // 移除事件监听器
+      uni.$off('refresh-errorbook');
+      uni.$off('errors-count-updated');
     });
 
     return {
@@ -544,8 +577,7 @@ export default {
       onRefresh,
       onRestore,
       onAbort,
-      handleRetry,
-      dismissError
+      loadErrorBook
     };
   }
 };

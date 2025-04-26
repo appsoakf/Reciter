@@ -2,7 +2,7 @@ import {
 	createSSRApp
 } from "vue";
 import App from "./App.vue";
-import LoadingError from './components/loading-error.vue';
+import LoadingError from './components/LoadingError.vue';
 
 export function createApp() {
 	const app = createSSRApp(App);

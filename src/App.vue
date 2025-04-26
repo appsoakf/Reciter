@@ -1,35 +1,6 @@
 <script>
 // 导入必要的常量
 const STORAGE_KEY = 'reciter_words';
-const mockWords = [
-  { id: 1, name: 'apple', pos: 'n.', meaning: '苹果' },
-  { id: 2, name: 'banana', pos: 'n.', meaning: '香蕉' },
-  { id: 3, name: 'book', pos: 'n.', meaning: '书籍' },
-  { id: 4, name: 'cat', pos: 'n.', meaning: '猫' },
-  { id: 5, name: 'dog', pos: 'n.', meaning: '狗' },
-  { id: 6, name: 'eat', pos: 'v.', meaning: '吃' },
-  { id: 7, name: 'friend', pos: 'n.', meaning: '朋友' },
-  { id: 8, name: 'go', pos: 'v.', meaning: '去' },
-  { id: 9, name: 'happy', pos: 'adj.', meaning: '快乐的' },
-  { id: 10, name: 'in', pos: 'prep.', meaning: '在...里' },
-  { id: 11, name: 'jump', pos: 'v.', meaning: '跳跃' },
-  { id: 12, name: 'kind', pos: 'adj.', meaning: '友善的' },
-  { id: 13, name: 'love', pos: 'v./n.', meaning: '爱；喜爱' },
-  { id: 14, name: 'moon', pos: 'n.', meaning: '月亮' },
-  { id: 15, name: 'nice', pos: 'adj.', meaning: '好的；友好的' },
-  { id: 16, name: 'open', pos: 'v./adj.', meaning: '打开；开着的' },
-  { id: 17, name: 'pen', pos: 'n.', meaning: '钢笔' },
-  { id: 18, name: 'question', pos: 'n.', meaning: '问题' },
-  { id: 19, name: 'run', pos: 'v.', meaning: '跑' },
-  { id: 20, name: 'sun', pos: 'n.', meaning: '太阳' },
-  { id: 21, name: 'time', pos: 'n.', meaning: '时间' },
-  { id: 22, name: 'umbrella', pos: 'n.', meaning: '雨伞' },
-  { id: 23, name: 'very', pos: 'adv.', meaning: '非常' },
-  { id: 24, name: 'water', pos: 'n.', meaning: '水' },
-  { id: 25, name: 'xylophone', pos: 'n.', meaning: '木琴' },
-  { id: 26, name: 'yellow', pos: 'adj.', meaning: '黄色的' },
-  { id: 27, name: 'zoo', pos: 'n.', meaning: '动物园' },
-];
 
 export default {
   // 全局数据
@@ -99,6 +70,13 @@ export default {
       // 监听应用错误
       uni.onError((err) => {
         console.error('应用发生错误:', err);
+        // 提示用户需要退出应用
+        uni.showModal({
+          title: '应用错误',
+          content: '应用发生错误，请退出并重新启动应用。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
       });
       
       // 全局未捕获的Promise错误
@@ -107,6 +85,13 @@ export default {
           console.error('未处理的Promise异常:', event.reason);
           // 阻止默认处理
           event.preventDefault();
+          // 提示用户需要退出应用
+          uni.showModal({
+            title: '应用错误',
+            content: '应用发生异常，请退出并重新启动应用。',
+            showCancel: false,
+            confirmText: '知道了'
+          });
         });
       }
       
@@ -247,55 +232,6 @@ export default {
       }
     },
 
-    // 紧急重置功能
-    emergencyReset() {
-      console.log('执行紧急数据重置');
-      try {
-        // 清除所有本地存储
-        uni.clearStorageSync();
-        console.log('已清除所有本地存储');
-        
-        // 重新设置初始数据
-        uni.setStorageSync(STORAGE_KEY, JSON.stringify(mockWords));
-        console.log('已重新设置初始单词数据');
-        
-        // 显示成功提示
-        uni.showToast({
-          title: '数据已重置',
-          icon: 'success',
-          duration: 2000
-        });
-        
-        // 2秒后重启应用（如果平台支持）
-        setTimeout(() => {
-          // 某些平台可能不支持重启应用
-          try {
-            // 尝试回到首页
-            const pages = getCurrentPages();
-            if (pages.length > 1) {
-              uni.navigateBack({
-                delta: pages.length - 1
-              });
-            }
-          } catch (e) {
-            console.error('无法重启应用:', e);
-          }
-        }, 2000);
-        
-        return true;
-      } catch (error) {
-        console.error('紧急重置失败:', error);
-        
-        uni.showToast({
-          title: '重置失败，请手动重启应用',
-          icon: 'none',
-          duration: 2000
-        });
-        
-        return false;
-      }
-    },
-
     // 设置紧急解锁机制
     setupEmergencyUnlock() {
       console.log('设置紧急UI解锁机制');
@@ -332,6 +268,15 @@ export default {
         window.addEventListener('error', (event) => {
           console.error('紧急处理器捕获到全局错误:', event.message);
           this.checkAndUnlockUI();
+          
+          // 添加提示用户需要退出应用
+          uni.showModal({
+            title: '应用错误',
+            content: '应用发生错误，请退出并重新启动应用。',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+          
           event.preventDefault();
           return true;
         }, true);
@@ -339,6 +284,15 @@ export default {
         window.addEventListener('unhandledrejection', (event) => {
           console.error('紧急处理器捕获到未处理的Promise异常:', event.reason);
           this.checkAndUnlockUI();
+          
+          // 添加提示用户需要退出应用
+          uni.showModal({
+            title: '应用错误',
+            content: '应用发生异常，请退出并重新启动应用。',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+          
           event.preventDefault();
           return true;
         });
@@ -380,20 +334,17 @@ export default {
               });
             }
             
-            // 不再自动填充默认单词数据，防止干扰数据清空功能
-            // 只有在页面明确显示错误状态时才考虑恢复数据
+            // 移除对mockWords的引用和相关逻辑
             if (currentPage.$vm.wordList && 
                 currentPage.$vm.wordList.length === 0 && 
-                currentPage.$vm.showError && // 只有在显示错误时才恢复
-                currentPage.$vm.mockWords) {
-              console.log('检测到页面错误状态，尝试恢复基本功能');
-              // 确认用户是否真的希望清空数据
-              const storageData = uni.getStorageSync('reciter_words');
-              if (storageData && storageData === '[]') {
-                console.log('用户已清空数据，不自动恢复');
-              } else {
-                currentPage.$vm.wordList = [...currentPage.$vm.mockWords];
-              }
+                currentPage.$vm.showError) {
+              // 提示用户需要退出应用
+              uni.showModal({
+                title: '应用错误',
+                content: '应用数据加载失败，请退出并重新启动应用。',
+                showCancel: false,
+                confirmText: '知道了'
+              });
             }
           }
           

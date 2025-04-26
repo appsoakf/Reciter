@@ -3,94 +3,164 @@
     <!-- 单词头部区域 -->
     <view class="word-header" :class="{ 'loading': isLoading }">
       <view class="word-main">
-        <view class="word-name" v-if="!isEditing">{{ word.name || '加载中...' }}</view>
+        <view class="word-name" v-if="!isEditingName">{{ word.name || '加载中...' }}</view>
         <input v-else class="word-name-input" v-model="editFormData.name" placeholder="输入单词" />
-        <view class="word-pos-tag" v-if="!isEditing">{{ word.pos || '' }}</view>
-        <view v-else class="pos-selection">
-          <view 
-            v-for="(item, index) in posOptions" 
-            :key="index"
-            class="pos-item-small"
-            :class="{ 'active': editFormData.pos.includes(item.value) }"
-            @click="togglePos(item.value)"
-          >
-            {{ item.label }}
-          </view>
-        </view>
+        <!-- 移除词性标签 -->
       </view>
-      <!-- 添加刷新按钮 -->
-      <view class="refresh-btn" @click="handleRefresh" v-if="!isLoading && !loadError.show && !isEditing">
-        <text class="refresh-icon">↻</text>
+      <!-- 删除按钮 (之前是刷新按钮) -->
+      <view class="delete-btn" @click="handleDelete" v-if="!isLoading && !loadError.show && !isEditingName">
+        <text class="delete-icon">🗑️</text>
       </view>
     </view>
     
     <!-- 内容区域 -->
     <scroll-view scroll-y class="content-area" v-if="!isLoading && !loadError.show">
-      <!-- 中文释义区块 -->
-      <view class="detail-section">
-        <view class="section-title">中文释义</view>
-        <view class="section-content chinese-meaning" v-if="!isEditing">{{ word.meaning || '暂无释义' }}</view>
-        <textarea v-else class="edit-textarea" v-model="editFormData.meaning" placeholder="输入中文释义"></textarea>
-      </view>
-      
-      <!-- 例句区块 - 始终显示，没有数据时显示暂无例句 -->
+      <!-- 用法模块 (合并中文释义和例句) -->
       <view class="detail-section">
         <view class="section-title">
-          例句 <span v-if="!isEditing && word.examples && word.examples.length">({{ word.examples.length }})</span>
-          <text v-if="isEditing" class="add-btn" @click="addExample">+ 添加例句</text>
+          用法
+          <text v-if="!isEditingUsage" class="edit-btn" @click="handleEditUsage">编辑</text>
+          <text v-else class="save-btn" @click="handleSaveUsage">保存</text>
         </view>
         
         <!-- 查看模式 -->
-        <view class="example-list" v-if="!isEditing && word.examples && word.examples.length > 0">
-          <view class="example-item" v-for="(example, index) in word.examples" :key="index">
-            <view class="example-number">{{ index + 1 }}</view>
-            <view class="example-content">
-              <view class="example-en">
-                <text v-html="highlightWord(example.en, word.name)"></text>
+        <view v-if="!isEditingUsage">
+          <!-- 显示多个中文释义及其例句 -->
+          <view v-if="word.usages && word.usages.length > 0">
+            <view v-for="(usage, usageIndex) in word.usages" :key="usageIndex" class="usage-item">
+              <!-- 词性 -->
+              <view class="usage-pos" v-if="usage.pos">{{ usage.pos }}</view>
+              
+              <!-- 中文释义 -->
+              <view class="section-content chinese-meaning">{{ usage.meaning }}</view>
+              
+              <!-- 例句列表 -->
+              <view class="example-list" v-if="usage.examples && usage.examples.length > 0">
+                <view class="example-item" v-for="(example, index) in usage.examples" :key="index">
+                  <view class="example-number">{{ index + 1 }}</view>
+                  <view class="example-content">
+                    <view class="example-en">
+                      <text v-html="highlightWord(example.en, word.name)"></text>
+                    </view>
+                    <view class="example-zh">{{ example.zh }}</view>
+                  </view>
+                </view>
               </view>
-              <view class="example-zh">{{ example.zh }}</view>
+              
+              <view class="empty-module" v-if="!usage.examples || usage.examples.length === 0">
+                暂无例句
+              </view>
+            </view>
+          </view>
+          
+          <!-- 兼容旧数据格式的显示方式 -->
+          <view v-else>
+            <!-- 中文释义 -->
+            <view class="section-content chinese-meaning">{{ word.meaning || '暂无释义' }}</view>
+            
+            <!-- 例句列表 -->
+            <view class="example-list" v-if="word.examples && word.examples.length > 0">
+              <view class="example-item" v-for="(example, index) in word.examples" :key="index">
+                <view class="example-number">{{ index + 1 }}</view>
+                <view class="example-content">
+                  <view class="example-en">
+                    <text v-html="highlightWord(example.en, word.name)"></text>
+                  </view>
+                  <view class="example-zh">{{ example.zh }}</view>
+                </view>
+              </view>
+            </view>
+            
+            <view class="empty-module" v-if="!word.examples || word.examples.length === 0">
+              暂无例句
             </view>
           </view>
         </view>
         
         <!-- 编辑模式 -->
-        <view v-if="isEditing">
-          <view 
-            v-for="(example, index) in editFormData.examples" 
-            :key="index"
-            class="example-edit-item"
-          >
-            <view class="example-edit-header">
-              <view class="example-number">{{ index + 1 }}</view>
-              <view class="example-delete" @click="removeExample(index)">删除</view>
-            </view>
-            <textarea 
-              class="edit-textarea" 
-              v-model="example.en" 
-              placeholder="输入英文例句"
-            ></textarea>
-            <textarea 
-              class="edit-textarea" 
-              v-model="example.zh" 
-              placeholder="输入中文翻译"
-            ></textarea>
+        <view v-if="isEditingUsage">
+          <!-- 中文意思列表 -->
+          <view class="section-subtitle">
+            词性及中文释义
+            <text class="add-btn" @click="addUsage">+ 添加意思</text>
           </view>
-        </view>
-        
-        <view class="empty-module" v-if="(!isEditing && (!word.examples || word.examples.length === 0)) || (isEditing && editFormData.examples.length === 0)">
-          暂无例句
+          
+          <!-- 每个意思及其例句 -->
+          <view 
+            v-for="(usage, usageIndex) in editFormData.usages" 
+            :key="usageIndex"
+            class="usage-edit-item"
+          >
+            <view class="usage-edit-header">
+              <view class="usage-number">{{ usageIndex + 1 }}</view>
+              <view class="usage-delete" @click="removeUsage(usageIndex)" v-if="editFormData.usages.length > 1">删除</view>
+            </view>
+            
+            <!-- 编辑词性 -->
+            <view class="pos-label">词性：</view>
+            <view class="pos-selection usage-pos-selection">
+              <view 
+                v-for="(item, index) in posOptions" 
+                :key="index"
+                class="pos-item-small"
+                :class="{ 'active': usage.pos === item.value }"
+                @click="setUsagePos(usageIndex, item.value)"
+              >
+                {{ item.label }}
+              </view>
+            </view>
+            
+            <!-- 编辑中文释义 -->
+            <textarea 
+              class="edit-textarea" 
+              v-model="usage.meaning" 
+              placeholder="输入中文释义"
+            ></textarea>
+            
+            <!-- 编辑例句 -->
+            <view class="section-subtitle example-subtitle">
+              例句
+              <text class="add-btn" @click="addExampleToUsage(usageIndex)">+ 添加例句</text>
+            </view>
+            
+            <view 
+              v-for="(example, exampleIndex) in usage.examples" 
+              :key="exampleIndex"
+              class="example-edit-item"
+            >
+              <view class="example-edit-header">
+                <view class="example-number">{{ exampleIndex + 1 }}</view>
+                <view class="example-delete" @click="removeExampleFromUsage(usageIndex, exampleIndex)">删除</view>
+              </view>
+              <textarea 
+                class="edit-textarea" 
+                v-model="example.en" 
+                placeholder="输入英文例句"
+              ></textarea>
+              <textarea 
+                class="edit-textarea" 
+                v-model="example.zh" 
+                placeholder="输入中文翻译"
+              ></textarea>
+            </view>
+            
+            <view class="empty-module" v-if="usage.examples.length === 0">
+              暂无例句，点击"添加例句"按钮添加
+            </view>
+          </view>
         </view>
       </view>
       
-      <!-- 相关单词区块 - 始终显示，没有数据时显示暂无相关单词 -->
+      <!-- 相关单词区块 -->
       <view class="detail-section">
         <view class="section-title">
-          相关单词 <span v-if="!isEditing && word.relatedWords && word.relatedWords.length">({{ word.relatedWords.length }})</span>
-          <text v-if="isEditing" class="add-btn" @click="showSearchRelatedWord">+ 添加相关单词</text>
+          相关单词
+          <text v-if="!isEditingRelated" class="edit-btn" @click="handleEditRelated">编辑</text>
+          <text v-else class="save-btn" @click="handleSaveRelated">保存</text>
         </view>
         
         <!-- 查看模式 -->
-        <view class="related-list" v-if="!isEditing && word.relatedWords && word.relatedWords.length > 0">
+        <view class="related-list" v-if="!isEditingRelated && word.relatedWords && word.relatedWords.length > 0">
           <view 
             class="related-item" 
             v-for="(relatedWord, index) in word.relatedWords" 
@@ -107,7 +177,7 @@
         </view>
         
         <!-- 编辑模式 -->
-        <view v-if="isEditing">
+        <view v-if="isEditingRelated">
           <!-- 搜索单词弹窗 -->
           <view v-if="isSearchingRelatedWord" class="related-word-search">
             <view class="search-header">
@@ -135,6 +205,10 @@
             <view v-else class="no-search-results">
               <text>{{ relatedWordSearch ? '没有找到匹配的单词' : '请输入单词名称进行搜索' }}</text>
             </view>
+          </view>
+          
+          <view class="related-edit-header" style="margin-top: 8px;">
+            <text class="add-btn" @click="showSearchRelatedWord">+ 添加相关单词</text>
           </view>
           
           <view 
@@ -167,20 +241,21 @@
           </view>
         </view>
         
-        <view class="empty-module" v-if="(!isEditing && (!word.relatedWords || word.relatedWords.length === 0)) || (isEditing && editFormData.relatedWords.length === 0)">
+        <view class="empty-module" v-if="(!isEditingRelated && (!word.relatedWords || word.relatedWords.length === 0)) || (isEditingRelated && editFormData.relatedWords.length === 0)">
           暂无相关单词
         </view>
       </view>
       
-      <!-- 注意事项模块 - 始终显示，没有数据时显示暂无注意事项 -->
+      <!-- 注意事项模块 -->
       <view class="detail-section">
         <view class="section-title">
           注意事项
-          <text v-if="isEditing" class="add-btn" @click="addNote">+ 添加注意事项</text>
+          <text v-if="!isEditingNotes" class="edit-btn" @click="handleEditNotes">编辑</text>
+          <text v-else class="save-btn" @click="handleSaveNotes">保存</text>
         </view>
         
         <!-- 查看模式 -->
-        <view class="notes-list" v-if="!isEditing && word.notes && word.notes.length > 0">
+        <view class="notes-list" v-if="!isEditingNotes && word.notes && word.notes.length > 0">
           <view class="note-item" v-for="(note, index) in word.notes" :key="index">
             <view class="note-bullet">•</view>
             <view class="note-content">{{ note }}</view>
@@ -188,7 +263,11 @@
         </view>
         
         <!-- 编辑模式 -->
-        <view v-if="isEditing">
+        <view v-if="isEditingNotes">
+          <view class="note-edit-header">
+            <text class="add-btn" @click="addNote">+ 添加注意事项</text>
+          </view>
+          
           <view 
             v-for="(note, index) in editFormData.notes" 
             :key="index"
@@ -206,16 +285,16 @@
           </view>
         </view>
         
-        <view class="empty-module" v-else-if="isEditing && (!editFormData.notes || editFormData.notes.length === 0)">
+        <view class="empty-module" v-else-if="isEditingNotes && (!editFormData.notes || editFormData.notes.length === 0)">
           暂无注意事项
         </view>
-        <view class="empty-module" v-else-if="!isEditing && word.commonErrors && word.commonErrors.length > 0">
+        <view class="empty-module" v-else-if="!isEditingNotes && word.commonErrors && word.commonErrors.length > 0">
           <view class="note-item" v-for="(error, index) in word.commonErrors" :key="index">
             <view class="note-bullet error-bullet">✘</view>
             <view class="note-content">{{ error }}</view>
           </view>
         </view>
-        <view class="empty-module" v-else-if="!isEditing && (!word.notes || word.notes.length === 0)">
+        <view class="empty-module" v-else-if="!isEditingNotes && (!word.notes || word.notes.length === 0)">
           暂无注意事项
         </view>
       </view>
@@ -251,14 +330,6 @@
         <button class="back-btn" @click="dismissError">返回</button>
       </view>
     </view>
-    
-    <!-- 操作按钮区域 -->
-    <view class="actions" :class="{ 'disabled': isLoading || loadError.show }">
-      <button v-if="!isEditing" class="action-btn edit" @click="handleEdit" hover-class="btn-hover" :disabled="isLoading || loadError.show">编辑</button>
-      <button v-else class="action-btn save" @click="handleSaveEdit" hover-class="btn-hover">保存</button>
-      <button v-if="!isEditing" class="action-btn delete" @click="handleDelete" hover-class="btn-hover" :disabled="isLoading || loadError.show">删除</button>
-      <button v-else class="action-btn cancel" @click="handleCancelEdit" hover-class="btn-hover">取消</button>
-    </view>
   </view>
 </template>
 
@@ -271,154 +342,6 @@ import { onLoad, onShow } from '@/utils/uni-hooks.js';
 // 导入必要的常量
 const STORAGE_KEY = 'reciter_words';
 
-// 添加mock数据，确保相关单词模块可正常工作
-const mockWords = [
-  {
-    id: 1,
-    name: 'apple',
-    pos: 'n.',
-    meaning: '苹果',
-    englishMeaning: 'a round fruit with red, yellow or green skin and firm white flesh',
-    phonetic: '/ˈæpl/',
-    examples: [
-      {
-        en: 'She took a bite of the apple.',
-        zh: '她咬了一口苹果。'
-      },
-      {
-        en: 'An apple a day keeps the doctor away.',
-        zh: '一天一苹果，医生远离我。'
-      }
-    ],
-    notes: [
-      'apple除表示"苹果"外，也可用于短语"apple of one\'s eye"表示"心肝宝贝"',
-      '用于成语"the apple doesn\'t fall far from the tree"表示"有其父必有其子"'
-    ],
-    relatedWords: [
-      { id: 42, name: 'applesauce', pos: 'n.', meaning: '苹果酱' },
-      { id: 43, name: 'applet', pos: 'n.', meaning: '小应用程序' },
-      { id: 44, name: 'pineapple', pos: 'n.', meaning: '菠萝，凤梨' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'banana',
-    pos: 'n.',
-    meaning: '香蕉',
-    englishMeaning: 'a long curved fruit with a yellow skin',
-    phonetic: '/bəˈnɑːnə/',
-    examples: [
-      {
-        en: 'I like to eat a banana for breakfast.',
-        zh: '我喜欢早餐吃香蕉。'
-      },
-      {
-        en: 'The monkey peeled the banana before eating it.',
-        zh: '猴子在吃香蕉前先剥了皮。'
-      }
-    ],
-    notes: [
-      '香蕉在热带地区广泛种植',
-      '成熟的香蕉会从绿色变为黄色'
-    ],
-    relatedWords: [
-      { id: 45, name: 'plantain', pos: 'n.', meaning: '芭蕉' },
-      { id: 46, name: 'fruit', pos: 'n.', meaning: '水果' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'book',
-    pos: 'n./v.',
-    meaning: '书；预订',
-    englishMeaning: 'a written or printed work consisting of pages; to reserve something',
-    phonetic: '/bʊk/',
-    examples: [
-      {
-        en: 'I read a book about ancient history.',
-        zh: '我读了一本关于古代历史的书。'
-      },
-      {
-        en: 'Please book a table for dinner tonight.',
-        zh: '请为今晚的晚餐预订一张桌子。'
-      },
-      {
-        en: 'She likes to read books before going to sleep.',
-        zh: '她喜欢睡前阅读书籍。'
-      }
-    ],
-    notes: [
-      'book作为名词表示"书籍"，作为动词表示"预订"',
-      '常用短语：by the book（按规矩办事）、throw the book at（严惩）、in someone\'s book（在某人看来）'
-    ],
-    relatedWords: [
-      { id: 47, name: 'bookcase', pos: 'n.', meaning: '书柜' },
-      { id: 48, name: 'booklet', pos: 'n.', meaning: '小册子' },
-      { id: 49, name: 'booking', pos: 'n.', meaning: '预订' },
-      { id: 50, name: 'bookworm', pos: 'n.', meaning: '书虫；爱读书的人' }
-    ]
-  },
-  {
-    id: 4,
-    name: 'pear',
-    pos: 'n.',
-    meaning: '梨',
-    englishMeaning: 'a sweet fruit with a rounded bottom and slightly pointed top',
-    phonetic: '/peər/',
-    examples: [
-      {
-        en: 'The pear was sweet and juicy.',
-        zh: '这个梨又甜又多汁。'
-      },
-      {
-        en: 'Asian pears are more round than European pears.',
-        zh: '亚洲梨比欧洲梨更圆。'
-      }
-    ],
-    notes: [
-      '梨有多种品种，形状和颜色各异',
-      '常见的表达：pear-shaped（梨形的；失败的）'
-    ],
-    relatedWords: [
-      { id: 51, name: 'fruit', pos: 'n.', meaning: '水果' },
-      { id: 52, name: 'apple', pos: 'n.', meaning: '苹果' }
-    ]
-  },
-  {
-    id: 6,
-    name: 'eat',
-    pos: 'v.',
-    meaning: '吃；进食',
-    englishMeaning: 'to put food in your mouth and swallow it',
-    phonetic: '/iːt/',
-    examples: [
-      {
-        en: 'We usually eat dinner at 7 pm.',
-        zh: '我们通常在晚上7点吃晚餐。'
-      },
-      {
-        en: 'The children ate all the cookies.',
-        zh: '孩子们吃光了所有的饼干。'
-      },
-      {
-        en: 'I don\'t eat meat.',
-        zh: '我不吃肉。'
-      }
-    ],
-    notes: [
-      'eat的过去式是ate，过去分词是eaten',
-      '常用搭配：eat up（吃完）、eat out（在外就餐）、eat away at（逐渐侵蚀）',
-      '表达"吃饭"时，可以说eat a meal或have a meal'
-    ],
-    relatedWords: [
-      { id: 53, name: 'eatable', pos: 'adj.', meaning: '可食用的' },
-      { id: 54, name: 'edible', pos: 'adj.', meaning: '可食用的' },
-      { id: 55, name: 'feast', pos: 'n./v.', meaning: '盛宴；尽情享用' },
-      { id: 56, name: 'devour', pos: 'v.', meaning: '狼吞虎咽；津津有味地读' }
-    ]
-  }
-];
-
 const word = ref({});
 const wordId = ref(null);
 const isLoading = ref(true);
@@ -430,18 +353,28 @@ const loadError = ref({
   details: '' 
 });
 
-// 添加编辑状态和表单数据
-const isEditing = ref(false);
+// 替换单一编辑状态为多个模块编辑状态
+const isEditingName = ref(false);
+const isEditingUsage = ref(false);
+const isEditingRelated = ref(false);
+const isEditingNotes = ref(false);
+
+// 表单数据
 const editFormData = reactive({
   name: '',
   pos: [],
-  meaning: '',
-  // englishMeaning: '', // 已移除英文释义字段
+  meaning: '', // 保留以兼容旧数据
   phonetic: '',
-  examples: [],
+  usages: [], // 新增：多个意思及其例句
+  examples: [], // 保留以兼容旧数据
   relatedWords: [],
   notes: []
 });
+
+// 相关单词搜索
+const isSearchingRelatedWord = ref(false);
+const relatedWordSearch = ref('');
+const relatedWordSearchResults = ref([]);
 
 // 词性选项
 const posOptions = [
@@ -502,27 +435,414 @@ const playWordSound = () => {
   setTimeout(() => {
     isPlaying.value = false;
   }, 1200);
-  
-  // 实际应用中可以这样实现：
-  // const innerAudioContext = uni.createInnerAudioContext();
-  // innerAudioContext.autoplay = true;
-  // innerAudioContext.src = `https://dict.youdao.com/dictvoice?audio=${word.value.name}&type=1`;
-  // innerAudioContext.onPlay(() => {
-  //   isPlaying.value = true;
-  // });
-  // innerAudioContext.onEnded(() => {
-  //   isPlaying.value = false;
-  // });
-  // innerAudioContext.onError(() => {
-  //   isPlaying.value = false;
-  //   uni.showToast({
-  //     title: '播放失败',
-  //     icon: 'none'
-  //   });
-  // });
 };
 
-// 添加检查网络连接状态的方法
+// 处理单词名称编辑
+const handleEditName = () => {
+  isEditingName.value = true;
+  editFormData.name = word.value.name || '';
+  
+  // 处理词性
+  if (typeof word.value.pos === 'string') {
+    editFormData.pos = word.value.pos.split('/').filter(Boolean);
+  } else if (Array.isArray(word.value.pos)) {
+    editFormData.pos = [...word.value.pos];
+  } else {
+    editFormData.pos = [];
+  }
+};
+
+// 保存单词名称编辑
+const handleSaveName = async () => {
+  if (!editFormData.name || editFormData.name.trim() === '') {
+    uni.showToast({
+      title: '请输入单词',
+      icon: 'none'
+    });
+    return;
+  }
+  
+  if (editFormData.pos.length === 0) {
+    uni.showToast({
+      title: '请选择至少一个词性',
+      icon: 'none'
+    });
+    return;
+  }
+  
+  try {
+    uni.showLoading({
+      title: '保存中...',
+      mask: true
+    });
+    
+    // 创建更新对象
+    const updatedWord = {
+      ...word.value,
+      name: editFormData.name,
+      pos: processedPos.value
+    };
+    
+    // 更新单词
+    await updateWord(updatedWord.id, updatedWord);
+    
+    // 更新本地显示数据
+    word.value = updatedWord;
+    
+    // 清除缓存
+    if (wordCache[wordId.value]) {
+      delete wordCache[wordId.value];
+    }
+    
+    if (uni.$wordPreloadCache && uni.$wordPreloadCache[wordId.value]) {
+      delete uni.$wordPreloadCache[wordId.value];
+    }
+    
+    isEditingName.value = false;
+    uni.hideLoading();
+    uni.showToast({
+      title: '保存成功',
+      icon: 'success'
+    });
+    
+    // 通知其他页面刷新数据
+    uni.$emit('refreshWordList');
+  } catch (err) {
+    uni.hideLoading();
+    console.error('保存单词名称失败:', err);
+    uni.showToast({
+      title: '保存失败',
+      icon: 'none'
+    });
+  }
+};
+
+// 处理用法编辑
+const handleEditUsage = () => {
+  isEditingUsage.value = true;
+  
+  // 检查单词是否有新的usages结构
+  if (Array.isArray(word.value.usages) && word.value.usages.length > 0) {
+    // 使用新的usages结构
+    editFormData.usages = JSON.parse(JSON.stringify(word.value.usages));
+    
+    // 确保每个usage都有pos字段
+    editFormData.usages.forEach(usage => {
+      if (!usage.pos) {
+        // 如果没有词性，尝试从单词的pos字段获取
+        if (word.value.pos && typeof word.value.pos === 'string') {
+          // 取第一个词性
+          const firstPos = word.value.pos.split('/')[0];
+          usage.pos = firstPos || posOptions[0].value;
+        } else {
+          // 使用默认词性
+          usage.pos = posOptions[0].value;
+        }
+      }
+    });
+  } else {
+    // 兼容旧数据，创建新的usages结构
+    let wordPos = '';
+    // 尝试从word.pos中获取词性
+    if (word.value.pos && typeof word.value.pos === 'string') {
+      const posParts = word.value.pos.split('/');
+      if (posParts.length > 0) {
+        wordPos = posParts[0];
+      }
+    }
+    
+    // 如果没有词性，使用默认值
+    if (!wordPos) {
+      wordPos = posOptions[0].value;
+    }
+    
+    editFormData.usages = [{
+      pos: wordPos,
+      meaning: word.value.meaning || '',
+      examples: Array.isArray(word.value.examples) 
+        ? JSON.parse(JSON.stringify(word.value.examples))
+        : []
+    }];
+  }
+};
+
+// 保存用法编辑
+const handleSaveUsage = async () => {
+  // 检查每个用法是否有有效的中文意思
+  const hasEmptyMeaning = editFormData.usages.some(usage => !usage.meaning || usage.meaning.trim() === '');
+  if (hasEmptyMeaning) {
+    uni.showToast({
+      title: '请填写所有中文释义',
+      icon: 'none'
+    });
+    return;
+  }
+  
+  // 检查是否有选择词性
+  const hasNoPOS = editFormData.usages.some(usage => !usage.pos);
+  if (hasNoPOS) {
+    // 为缺少词性的用法自动分配默认词性
+    editFormData.usages.forEach((usage, index) => {
+      if (!usage.pos) {
+        console.log(`为第${index+1}个用法分配默认词性`);
+        usage.pos = posOptions[0].value;
+      }
+    });
+    
+    uni.showToast({
+      title: '已自动为所有释义分配词性',
+      icon: 'none',
+      duration: 2000
+    });
+  }
+  
+  // 检查例句的英文和中文是否都已填写
+  let hasEmptyExample = false;
+  let emptyExampleIndex = 0;
+  let emptyExampleUsageIndex = 0;
+  
+  for (let i = 0; i < editFormData.usages.length; i++) {
+    const usage = editFormData.usages[i];
+    if (!Array.isArray(usage.examples)) {
+      // 确保examples是数组
+      usage.examples = [];
+      continue;
+    }
+    
+    for (let j = 0; j < usage.examples.length; j++) {
+      const example = usage.examples[j];
+      if (!example) {
+        // 处理null或undefined的例句
+        usage.examples.splice(j, 1);
+        j--; 
+        continue;
+      }
+      
+      if ((!example.en || example.en.trim() === '') && (!example.zh || example.zh.trim() === '')) {
+        // 如果英文和中文都为空，可以直接删除这个例句
+        usage.examples.splice(j, 1);
+        j--; // 调整索引
+      } else if (!example.en || example.en.trim() === '' || !example.zh || example.zh.trim() === '') {
+        // 如果只有一个为空
+        hasEmptyExample = true;
+        emptyExampleIndex = j;
+        emptyExampleUsageIndex = i;
+        break;
+      }
+    }
+    
+    if (hasEmptyExample) break;
+  }
+  
+  if (hasEmptyExample) {
+    uni.showToast({
+      title: `请完善第${emptyExampleUsageIndex + 1}个释义的第${emptyExampleIndex + 1}个例句`,
+      icon: 'none'
+    });
+    return;
+  }
+  
+  try {
+    uni.showLoading({
+      title: '保存中...',
+      mask: true
+    });
+    
+    // 为向后兼容，保留meaning字段和examples字段
+    let mainMeaning = '';
+    let allExamples = [];
+    
+    if (editFormData.usages.length > 0) {
+      // 使用第一个意思作为主meaning
+      mainMeaning = editFormData.usages[0].meaning;
+      
+      // 合并所有例句
+      editFormData.usages.forEach(usage => {
+        if (Array.isArray(usage.examples)) {
+          allExamples = allExamples.concat(usage.examples);
+        }
+      });
+    }
+    
+    // 生成新的pos字段：合并所有词性，用/分隔
+    const posArray = editFormData.usages.map(usage => usage.pos).filter(Boolean);
+    const uniquePosArray = [...new Set(posArray)]; // 去重
+    const combinedPos = uniquePosArray.join('/');
+    
+    // 确保所有的usages和examples都有正确的数据结构
+    const normalizedUsages = editFormData.usages.map(usage => {
+      return {
+        pos: usage.pos || posOptions[0].value, // 确保有默认词性
+        meaning: usage.meaning || '',
+        examples: Array.isArray(usage.examples) 
+          ? usage.examples.map(example => ({
+              en: example.en || '',
+              zh: example.zh || ''
+            }))
+          : []
+      };
+    });
+    
+    // 创建更新对象
+    const updatedWord = {
+      ...word.value,
+      pos: combinedPos, // 更新pos字段为合并后的值
+      meaning: mainMeaning,
+      examples: allExamples,
+      usages: normalizedUsages
+    };
+    
+    // 更新单词
+    await updateWord(updatedWord.id, updatedWord);
+    
+    // 更新本地显示数据
+    word.value = updatedWord;
+    
+    // 清除缓存
+    if (wordCache[wordId.value]) {
+      delete wordCache[wordId.value];
+    }
+    
+    if (uni.$wordPreloadCache && uni.$wordPreloadCache[wordId.value]) {
+      delete uni.$wordPreloadCache[wordId.value];
+    }
+    
+    isEditingUsage.value = false;
+    uni.hideLoading();
+    uni.showToast({
+      title: '保存成功',
+      icon: 'success'
+    });
+    
+    // 通知其他页面刷新数据
+    uni.$emit('refreshWordList');
+  } catch (err) {
+    uni.hideLoading();
+    console.error('保存用法失败:', err);
+    uni.showToast({
+      title: '保存失败',
+      icon: 'none'
+    });
+  }
+};
+
+// 添加新的中文意思
+const addUsage = () => {
+  // 添加默认的词性
+  editFormData.usages.push({
+    pos: posOptions[0].value, // 使用第一个默认词性
+    meaning: '',
+    examples: []
+  });
+};
+
+// 删除中文意思
+const removeUsage = (index) => {
+  editFormData.usages.splice(index, 1);
+};
+
+// 添加例句到特定意思
+const addExampleToUsage = (usageIndex) => {
+  editFormData.usages[usageIndex].examples.push({
+    en: '',
+    zh: ''
+  });
+};
+
+// 删除特定意思中的例句
+const removeExampleFromUsage = (usageIndex, exampleIndex) => {
+  editFormData.usages[usageIndex].examples.splice(exampleIndex, 1);
+};
+
+// 添加例句
+const addExample = () => {
+  editFormData.examples.push({
+    en: '',
+    zh: ''
+  });
+};
+
+// 删除例句
+const removeExample = (index) => {
+  editFormData.examples.splice(index, 1);
+};
+
+// 添加注意事项
+const addNote = () => {
+  editFormData.notes.push('');
+};
+
+// 删除注意事项
+const removeNote = (index) => {
+  editFormData.notes.splice(index, 1);
+};
+
+// 保留搜索相关单词的功能
+const searchRelatedWord = (e) => {
+  const value = e.detail ? e.detail.value : relatedWordSearch.value;
+  
+  if (!value.trim()) {
+    relatedWordSearchResults.value = [];
+    return;
+  }
+  
+  // 搜索单词
+  searchWords(value).then(results => {
+    // 过滤掉当前单词
+    relatedWordSearchResults.value = results.filter(w => w.id !== word.value.id);
+  }).catch(err => {
+    console.error('搜索单词失败:', err);
+    relatedWordSearchResults.value = [];
+  });
+};
+
+// 显示搜索相关单词弹窗
+const showSearchRelatedWord = () => {
+  isSearchingRelatedWord.value = true;
+  relatedWordSearch.value = '';
+  relatedWordSearchResults.value = [];
+};
+
+// 取消搜索相关单词
+const cancelSearchRelatedWord = () => {
+  isSearchingRelatedWord.value = false;
+  relatedWordSearch.value = '';
+  relatedWordSearchResults.value = [];
+};
+
+// 选择相关单词
+const selectRelatedWord = (selectedWord) => {
+  // 检查是否已添加
+  const exists = editFormData.relatedWords.some(w => w.id === selectedWord.id);
+  if (exists) {
+    uni.showToast({
+      title: '已添加该单词',
+      icon: 'none'
+    });
+    return;
+  }
+  
+  // 添加相关单词
+  editFormData.relatedWords.push({
+    id: selectedWord.id,
+    name: selectedWord.name,
+    pos: selectedWord.pos,
+    meaning: selectedWord.meaning
+  });
+  
+  // 关闭搜索框
+  relatedWordSearch.value = '';
+  relatedWordSearchResults.value = [];
+  isSearchingRelatedWord.value = false;
+  
+  uni.showToast({
+    title: '添加成功',
+    icon: 'success',
+    duration: 1000
+  });
+};
+
+// 设置检查网络连接状态的方法
 const checkNetworkStatus = () => {
   return new Promise((resolve) => {
     try {
@@ -547,10 +867,9 @@ const checkNetworkStatus = () => {
 // 添加内存缓存
 const wordCache = {};
 
-// 增加一个紧急恢复函数
+// 紧急恢复功能 - 使用简化版本，不依赖mockWords
 const emergencyRecover = () => {
-  console.log('启动紧急恢复流程');
-  
+  console.log('尝试紧急恢复');
   try {
     // 检查是否设置了forceEmpty标志
     const savedWordsStr = uni.getStorageSync(STORAGE_KEY);
@@ -558,40 +877,22 @@ const emergencyRecover = () => {
       try {
         const parsedData = JSON.parse(savedWordsStr);
         if (parsedData && typeof parsedData === 'object' && parsedData.forceEmpty === true) {
-          console.log('紧急恢复检测到forceEmpty标志，显示清空状态信息');
-          
-          loadError.value = {
-            show: true,
-            message: '单词数据已被清空',
-            details: '请返回单词列表页面'
-          };
-          isLoading.value = false;
-          
-          return true;
+          console.log('检测到forceEmpty标志，不进行恢复');
+          return false;
         }
       } catch (error) {
         console.error('检查forceEmpty标志失败:', error);
       }
     }
     
-    // 尝试直接加载第一个模拟单词
-    if (mockWords && mockWords.length > 0) {
-      const firstWord = mockWords[0];
-      console.log('使用第一个模拟单词作为紧急恢复:', firstWord.name);
-      
-      word.value = firstWord;
-      isLoading.value = false;
-      loadError.value.show = false;
-      
-      // 显示轻微提示
-      uni.showToast({
-        title: '加载了默认单词',
-        icon: 'none',
-        duration: 2000
-      });
-      
-      return true;
-    }
+    // 提示用户需要退出应用
+    uni.showModal({
+      title: '应用错误',
+      content: '无法加载单词数据，请退出并重新启动应用。',
+      showCancel: false,
+      confirmText: '知道了'
+    });
+    
     return false;
   } catch (error) {
     console.error('紧急恢复也失败了:', error);
@@ -599,95 +900,19 @@ const emergencyRecover = () => {
   }
 };
 
-// 强制更新单词数据 - 确保用最新的mockWords数据
-const forceRefreshWord = (id) => {
-  try {
-    // 查找最新的单词数据
-    const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-    
-    // 检查是否设置了forceEmpty标志
-    const savedWordsStr = uni.getStorageSync(STORAGE_KEY);
-    if (savedWordsStr) {
-      try {
-        const parsedData = JSON.parse(savedWordsStr);
-        if (parsedData && typeof parsedData === 'object' && parsedData.forceEmpty === true) {
-          console.log('forceRefreshWord检测到forceEmpty标志，停止刷新单词');
-          return false;
-        }
-      } catch (parseError) {
-        console.error('解析存储数据失败:', parseError);
-      }
-    }
-    
-    const latestWord = mockWords.find(w => w.id === numId);
-    
-    if (!latestWord) {
-      console.warn(`在mockWords中找不到ID为${numId}的单词`);
-      return false;
-    }
-    
-    console.log(`找到最新的单词数据: ${latestWord.name}`);
-    
-    // 更新本地存储
-    if (savedWordsStr) {
-      try {
-        let parsedData = JSON.parse(savedWordsStr);
-        
-        // 处理不同的存储格式
-        if (Array.isArray(parsedData)) {
-          // 找到并替换单词
-          const index = parsedData.findIndex(w => w.id === numId);
-          
-          if (index >= 0) {
-            // 替换单词
-            parsedData[index] = { ...latestWord };
-            console.log(`替换了本地存储中的单词: ${latestWord.name}`);
-          } else {
-            // 添加单词
-            parsedData.push({ ...latestWord });
-            console.log(`添加了新单词到本地存储: ${latestWord.name}`);
-          }
-          
-          // 保存回本地存储
-          uni.setStorageSync(STORAGE_KEY, JSON.stringify(parsedData));
-          console.log('成功更新本地存储');
-          
-          return true;
-        }
-        else if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.words)) {
-          // 处理新格式 {words: [...], forceEmpty: boolean}
-          const index = parsedData.words.findIndex(w => w.id === numId);
-          
-          if (index >= 0) {
-            // 替换单词
-            parsedData.words[index] = { ...latestWord };
-            console.log(`替换了本地存储中的单词: ${latestWord.name}`);
-          } else {
-            // 添加单词
-            parsedData.words.push({ ...latestWord });
-            console.log(`添加了新单词到本地存储: ${latestWord.name}`);
-          }
-          
-          // 保存回本地存储，保留forceEmpty标志
-          uni.setStorageSync(STORAGE_KEY, JSON.stringify(parsedData));
-          console.log('成功更新本地存储');
-          
-          return true;
-        }
-      } catch (e) {
-        console.error('解析或更新本地存储失败:', e);
-      }
-    }
-    
-    // 如果上面的尝试失败或本地存储为空，直接用完整的mockWords初始化存储
-    uni.setStorageSync(STORAGE_KEY, JSON.stringify([latestWord]));
-    console.log('已初始化本地存储为单个单词');
-    
-    return true;
-  } catch (e) {
-    console.error('强制更新单词数据失败:', e);
-    return false;
-  }
+// 移除强制刷新单词数据功能
+// 替换为加载错误处理函数
+const handleWordLoadError = (id) => {
+  console.error(`无法加载ID为${id}的单词`);
+  
+  // 提示用户
+  loadError.value = {
+    show: true,
+    message: '单词加载失败',
+    details: '无法加载单词详情，请退出并重新启动应用'
+  };
+  
+  isLoading.value = false;
 };
 
 // 更可靠的单词详情加载逻辑
@@ -696,15 +921,9 @@ const loadWordDetail = async (retryCount = 0, maxRetries = 3) => {
     console.error('加载失败：wordId 为空或无效');
     loadError.value = {
       show: true,
-      message: '无效的单词ID，请返回后重试',
-      details: '参数错误'
+      message: '无效的单词ID',
+      details: '请返回单词列表页面'
     };
-    
-    // 尝试紧急恢复
-    if (emergencyRecover()) {
-      console.log('紧急恢复成功，显示默认单词');
-      return;
-    }
     
     isLoading.value = false;
     return;
@@ -843,44 +1062,26 @@ const loadWordDetail = async (retryCount = 0, maxRetries = 3) => {
     
     // 处理未找到单词的错误
     if (error.notFound) {
-      console.log(`ID为${wordId.value}的单词在本地存储中不存在，尝试从mockWords查找`);
+      console.log(`ID为${wordId.value}的单词在本地存储中不存在`);
       
-      // 尝试从mockWords中查找
-      const mockWord = mockWords.find(item => item.id === wordId.value);
-      if (mockWord) {
-        console.log(`在mockWords中找到单词: ${mockWord.name}，但本地存储中没有这个单词`);
-        
-        loadError.value = {
-          show: true,
-          message: `ID为${wordId.value}的单词在您的单词库中不存在`,
-          details: `您可能尝试访问的是示例单词"${mockWord.name}"，但它不在您的单词库中`
-        };
-        return;
-      }
+      // 显示未找到单词的错误消息
+      loadError.value = {
+        show: true,
+        message: `ID为${wordId.value}的单词在您的单词库中不存在`,
+        details: '请返回单词列表页面'
+      };
+      return;
     }
     
     // 显示加载错误提示
     loadError.value = {
       show: true,
       message: `加载失败: ${error.message || '未知错误'}`,
-      details: error.stack
+      details: '请退出并重新启动应用'
     };
-    
-    // 尝试应急恢复
-    if (retryCount >= maxRetries) {
-      console.log('已达到最大重试次数，尝试紧急恢复');
-      if (emergencyRecover()) {
-        return;
-      }
-    }
     
     // 处理特定错误情况
     if (error.message.includes('找不到单词') || error.message.includes('无效ID')) {
-      // 尝试恢复
-      if (emergencyRecover()) {
-        return;
-      }
-      
       uni.showToast({ title: '找不到该单词', icon: 'none' });
       setTimeout(() => uni.navigateBack(), 1500);
       return;
@@ -1038,16 +1239,13 @@ const handleRetry = () => {
   
   // 先检查ID
   if (!wordId.value) {
-    console.error('wordId无效，尝试使用默认ID');
-    // 尝试使用默认ID
-    if (mockWords && mockWords.length > 0) {
-      wordId.value = mockWords[0].id;
-      console.log('设置了默认ID:', wordId.value);
-    } else {
-      uni.showToast({ title: '无法加载默认单词', icon: 'none' });
-      setTimeout(() => uni.navigateBack(), 1500);
-      return;
-    }
+    console.error('wordId无效，无法重试');
+    uni.showToast({ 
+      title: '无法加载单词，请退出应用', 
+      icon: 'none' 
+    });
+    setTimeout(() => uni.navigateBack(), 1500);
+    return;
   }
   
   // 尝试加载
@@ -1096,25 +1294,20 @@ const goToWordDetail = (id) => {
       } else {
         console.warn(`ID为${id}的单词在本地单词库中不存在`);
         
-        // 尝试从mockWords中查找，用于提示用户
-        const mockWord = mockWords.find(w => w.id === id);
-        if (mockWord) {
-          console.warn(`ID为${id}的单词在mockWords中存在(${mockWord.name})，但不在本地单词库中`);
-          
-          uni.showModal({
-            title: '单词不存在',
-            content: `您尝试访问的单词"${mockWord.name}"不在您的单词库中，是否仍要继续？`,
-            confirmText: '继续',
-            cancelText: '取消',
-            success: (res) => {
-              if (res.confirm) {
-                // 用户选择继续，执行跳转
-                performNavigate(id);
-              }
+        // 单词不存在，提示用户
+        uni.showModal({
+          title: '单词不存在',
+          content: `您尝试访问的单词不在您的单词库中`,
+          showCancel: false,
+          confirmText: '返回',
+          success: (res) => {
+            if (res.confirm) {
+              // 不执行跳转，返回上一页
+              return;
             }
-          });
-          return;
-        }
+          }
+        });
+        return;
       }
     }
   } catch (error) {
@@ -1149,278 +1342,7 @@ const performNavigate = (id) => {
   });
 };
 
-// 编辑单词 - 修改为直接在页面内编辑
-const handleEdit = () => {
-  try {
-    if (!word.value || !word.value.id) {
-      uni.showToast({ title: '单词信息不完整，无法编辑', icon: 'none' });
-      return;
-    }
-    
-    // 设置编辑模式
-    isEditing.value = true;
-    
-    // 填充表单数据
-    editFormData.name = word.value.name || '';
-    editFormData.meaning = word.value.meaning || '';
-    // 英文释义已移除
-    editFormData.phonetic = word.value.phonetic || '';
-    
-    // 处理词性 - 可能是字符串或数组
-    if (typeof word.value.pos === 'string') {
-      editFormData.pos = word.value.pos.split('/').filter(Boolean);
-    } else if (Array.isArray(word.value.pos)) {
-      editFormData.pos = [...word.value.pos];
-    } else {
-      editFormData.pos = [];
-    }
-    
-    // 复制例句数组
-    editFormData.examples = Array.isArray(word.value.examples) 
-      ? JSON.parse(JSON.stringify(word.value.examples))
-      : [];
-    
-    // 复制相关单词数组
-    editFormData.relatedWords = Array.isArray(word.value.relatedWords) 
-      ? JSON.parse(JSON.stringify(word.value.relatedWords))
-      : [];
-    
-    // 复制注意事项数组
-    editFormData.notes = Array.isArray(word.value.notes) 
-      ? JSON.parse(JSON.stringify(word.value.notes))
-      : [];
-    
-    console.log('进入编辑模式，表单数据:', editFormData);
-  } catch (err) {
-    console.error('处理编辑操作失败:', err);
-    uni.showToast({ title: '操作失败，请重试', icon: 'none' });
-  }
-};
-
-// 保存编辑
-const handleSaveEdit = async () => {
-  try {
-    // 表单验证 - 单词名称
-    if (!editFormData.name || editFormData.name.trim() === '') {
-      uni.showToast({
-        title: '请输入单词',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
-    }
-    
-    // 表单验证 - 词性
-    if (editFormData.pos.length === 0) {
-      uni.showToast({
-        title: '请选择至少一个词性',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
-    }
-    
-    // 表单验证 - 中文释义
-    if (!editFormData.meaning || editFormData.meaning.trim() === '') {
-      uni.showToast({
-        title: '请输入中文释义',
-        icon: 'none',
-        duration: 2000
-      });
-      return;
-    }
-    
-    // 显示加载提示
-    uni.showLoading({ 
-      title: '保存修改...',
-      mask: true
-    });
-    
-    // 构建要保存的单词对象
-    const wordToSave = {
-      id: word.value.id,
-      name: editFormData.name,
-      pos: processedPos.value,
-      meaning: editFormData.meaning,
-      // englishMeaning: '',  // 英文释义固定为空
-      phonetic: editFormData.phonetic || '',
-      examples: editFormData.examples || [],
-      relatedWords: editFormData.relatedWords || [],
-      notes: editFormData.notes || []
-    };
-    
-    // 获取需要建立双向关联的单词ID列表
-    const originalRelatedWordIds = word.value.relatedWords?.map(w => w.id) || [];
-    const newRelatedWordIds = editFormData.relatedWords.map(w => w.id);
-    
-    // 确定新增的关联单词
-    const addedRelatedWordIds = newRelatedWordIds.filter(id => !originalRelatedWordIds.includes(id));
-    
-    // 确定移除的关联单词
-    const removedRelatedWordIds = originalRelatedWordIds.filter(id => !newRelatedWordIds.includes(id));
-    
-    // 保存当前单词
-    await updateWord(wordToSave.id, wordToSave);
-    
-    // 更新相关单词中的双向关联
-    if (addedRelatedWordIds.length > 0 || removedRelatedWordIds.length > 0) {
-      try {
-        // 为新增关联的单词添加当前单词作为关联
-        for (const relatedWordId of addedRelatedWordIds) {
-          const relatedWord = await getWordById(relatedWordId);
-          if (relatedWord) {
-            // 确保relatedWords数组存在
-            if (!relatedWord.relatedWords) {
-              relatedWord.relatedWords = [];
-            }
-            
-            // 检查是否已经包含当前单词
-            const alreadyLinked = relatedWord.relatedWords.some(w => w.id === word.value.id);
-            
-            if (!alreadyLinked) {
-              // 添加当前单词作为关联单词
-              relatedWord.relatedWords.push({
-                id: word.value.id,
-                name: wordToSave.name, // 使用可能更新后的名称
-                pos: wordToSave.pos,
-                meaning: wordToSave.meaning
-              });
-              
-              // 更新相关单词
-              await updateWord(relatedWord.id, relatedWord);
-            }
-          }
-        }
-        
-        // 从移除关联的单词中删除当前单词
-        for (const relatedWordId of removedRelatedWordIds) {
-          const relatedWord = await getWordById(relatedWordId);
-          if (relatedWord && relatedWord.relatedWords) {
-            // 移除当前单词
-            relatedWord.relatedWords = relatedWord.relatedWords.filter(w => w.id !== word.value.id);
-            
-            // 更新相关单词
-            await updateWord(relatedWord.id, relatedWord);
-          }
-        }
-      } catch (err) {
-        console.error('更新相关单词关联关系失败:', err);
-        // 即使更新关联关系失败，主单词已保存成功，继续执行
-      }
-    }
-    
-    // 清除所有相关缓存，确保下次从存储加载最新数据
-    console.log('清除单词ID缓存:', wordId.value);
-    delete wordCache[wordId.value];
-    
-    // 清除全局预加载缓存
-    if (uni.$wordPreloadCache && uni.$wordPreloadCache[wordId.value]) {
-      console.log('清除全局预加载缓存');
-      delete uni.$wordPreloadCache[wordId.value];
-    }
-    
-    // 从存储中重新加载最新数据
-    console.log('从存储中重新加载单词数据');
-    const refreshedWord = await getWordById(wordId.value);
-    
-    // 更新本地显示数据
-    if (refreshedWord) {
-      console.log('成功从存储中加载最新数据:', refreshedWord.name);
-      word.value = refreshedWord;
-      // 更新内存缓存
-      wordCache[wordId.value] = refreshedWord;
-    } else {
-      // 如果无法从存储加载，使用保存的数据
-      console.log('无法从存储中加载最新数据，使用保存的数据');
-      word.value = {...wordToSave};
-      // 更新内存缓存
-      wordCache[wordId.value] = {...wordToSave};
-    }
-    
-    // 退出编辑模式
-    isEditing.value = false;
-    
-    uni.hideLoading();
-    uni.showToast({
-      title: '修改成功',
-      icon: 'success',
-      duration: 1500
-    });
-    
-    // 通知其他页面刷新数据
-    console.log('发送刷新单词列表事件');
-    uni.$emit('refreshWordList');
-  } catch (err) {
-    uni.hideLoading();
-    console.error('保存修改失败:', err);
-    uni.showToast({
-      title: '保存失败，请重试',
-      icon: 'none',
-      duration: 2000
-    });
-  }
-};
-
-// 取消编辑
-const handleCancelEdit = () => {
-  isEditing.value = false;
-  
-  // 清空编辑表单数据
-  editFormData.name = '';
-  editFormData.pos = [];
-  editFormData.meaning = '';
-  // 英文释义已移除
-  editFormData.phonetic = '';
-  editFormData.examples = [];
-  editFormData.relatedWords = [];
-  editFormData.notes = [];
-  
-  uni.showToast({
-    title: '已取消编辑',
-    icon: 'none',
-    duration: 1500
-  });
-};
-
-// 添加例句
-const addExample = () => {
-  editFormData.examples.push({
-    en: '',
-    zh: ''
-  });
-};
-
-// 删除例句
-const removeExample = (index) => {
-  editFormData.examples.splice(index, 1);
-};
-
-// 添加相关单词
-const addRelatedWord = () => {
-  editFormData.relatedWords.push({
-    id: Date.now(), // 临时ID
-    name: '',
-    pos: '',
-    meaning: ''
-  });
-};
-
-// 删除相关单词
-const removeRelatedWord = (index) => {
-  editFormData.relatedWords.splice(index, 1);
-};
-
-// 添加注意事项
-const addNote = () => {
-  editFormData.notes.push('');
-};
-
-// 删除注意事项
-const removeNote = (index) => {
-  editFormData.notes.splice(index, 1);
-};
-
-// 删除单词 - 使用同步方式
+// 删除单词 - 修改为直接显示确认框，不再需要原有编辑模式
 const handleDelete = () => {
   if (!word.value || !word.value.id) {
     uni.showToast({ title: '单词信息不完整，无法删除', icon: 'none' });
@@ -1512,78 +1434,6 @@ const handleDelete = () => {
   });
 };
 
-// 直接加载默认单词作为备用
-const loadDefaultWord = () => {
-  console.log('加载默认单词作为备用');
-  
-  // 直接从mockWords中获取第一个单词 (apple)
-  const defaultWord = mockWords[0];
-  if (defaultWord) {
-    console.log('成功获取默认单词:', defaultWord.name);
-    word.value = defaultWord;
-    wordId.value = defaultWord.id;
-    isLoading.value = false;
-    
-    // 简单提示用户
-    setTimeout(() => {
-      uni.showToast({
-        title: '已加载默认单词',
-        icon: 'none',
-        duration: 2000
-      });
-    }, 500);
-    
-    return true;
-  }
-  
-  return false;
-};
-
-// 添加强制重新初始化函数
-const forceInitialize = () => {
-  console.log('强制初始化单词详情页');
-  
-  // 检查是否已加载成功
-  if (!isLoading.value && word.value && word.value.id) {
-    console.log('页面已成功加载，无需初始化');
-    return;
-  }
-  
-  // 如果在5秒后仍在加载中，强制加载默认单词
-  if (isLoading.value) {
-    console.log('页面仍在加载中，强制加载默认单词');
-    loadDefaultWord();
-  }
-};
-
-// 页面显示时触发
-const handlePageShow = () => {
-  // 如果单词已被修改，重新加载数据
-  if (wordId.value) {
-    // 清除缓存，确保每次都加载最新数据
-    if (wordCache[wordId.value]) {
-      console.log('页面显示时清除缓存，确保加载最新数据:', wordId.value);
-      delete wordCache[wordId.value];
-    }
-    
-    // 清除全局预加载缓存
-    if (uni.$wordPreloadCache && uni.$wordPreloadCache[wordId.value]) {
-      console.log('页面显示时清除全局预加载缓存');
-      delete uni.$wordPreloadCache[wordId.value];
-    }
-    
-    // 延迟执行可避免与其他操作冲突
-    setTimeout(() => {
-      console.log('页面显示，重新加载单词详情:', wordId.value);
-      loadWordDetail(0, 3);
-    }, 200);
-  } else {
-    // 如果ID为空，尝试加载默认单词
-    console.log('handlePageShow: ID为空，尝试加载默认单词');
-    loadDefaultWord();
-  }
-};
-
 // 使用正确的页面显示生命周期钩子
 onShow(() => {
   console.log('单词详情页面显示，执行handlePageShow，当前ID:', wordId.value);
@@ -1606,7 +1456,7 @@ onMounted(() => {
   
   // 已经有ID时不要再设置默认ID，避免覆盖传入的ID
   if (!wordId.value && !isIdFromUrlProcessed.value) {
-    console.log('onMounted: ID为空，尝试使用默认ID');
+    console.log('onMounted: ID为空，尝试获取ID');
     // 直接从当前URL获取ID参数
     try {
       const pages = getCurrentPages();
@@ -1640,14 +1490,11 @@ onMounted(() => {
       console.error('onMounted: 解析URL获取ID出错:', err);
     }
     
-    // 如果上面的直接获取失败，延迟尝试加载默认ID
+    // 如果从URL获取ID失败，尝试加载单词列表中的第一个单词
     setTimeout(() => {
       if (!wordId.value && !isIdFromUrlProcessed.value) {
-        console.log('onMounted: 经过延时后ID仍为空，设置默认ID');
-        wordId.value = 1; // 默认加载apple
-        if (isLoading.value) {
-          loadWordDetail(0, 3);
-        }
+        console.log('onMounted: 经过延时后ID仍为空，尝试加载初始单词');
+        loadInitialWord();
       }
     }, 500);
   }
@@ -1779,252 +1626,332 @@ function processIdParameter(idParam) {
   } catch (e) {
     console.error('处理ID参数错误:', e);
     
-    // 尝试紧急恢复
-    if (emergencyRecover()) {
-      console.log('参数处理错误，但紧急恢复成功');
-    } else {
-      loadError.value = {
-        show: true,
-        message: '参数错误，无法加载单词',
-        details: e.message
-      };
-      isLoading.value = false;
-    }
+    // 显示错误信息并返回上一页
+    loadError.value = {
+      show: true,
+      message: '参数错误，无法加载单词',
+      details: e.message
+    };
+    isLoading.value = false;
+    
+    // 提示用户
+    uni.showModal({
+      title: '参数错误',
+      content: '无法加载单词，请退出并重新启动应用。',
+      showCancel: false,
+      confirmText: '返回',
+      success: (res) => {
+        if (res.confirm) {
+          uni.navigateBack();
+        }
+      }
+    });
   }
 }
 
 // 处理缺失ID的情况
 function handleMissingId() {
   console.log('处理缺失ID情况');
-  // 尝试使用默认ID (apple)
-  console.log('尝试使用默认ID 1 (apple)');
-  wordId.value = 1;
   
-  if (wordId.value) {
-    console.log('已设置默认ID:', wordId.value);
-    loadWordDetail(0, 3);
-  } else {
-    // 尝试紧急恢复
-    if (emergencyRecover()) {
-      console.log('无有效参数，但紧急恢复成功');
-    } else {
-      loadError.value = {
-        show: true,
-        message: '未提供单词ID',
-        details: '参数缺失'
-      };
-      isLoading.value = false;
-    }
-  }
+  // 尝试加载初始单词列表的第一个单词
+  loadInitialWord();
 }
 
-// 刷新并重新加载单词数据
-const handleRefresh = async () => {
-  console.log('单词刷新按钮被点击');
-  
-  // 检查是否设置了forceEmpty标志
-  try {
-    const savedWordsStr = uni.getStorageSync(STORAGE_KEY);
-    if (savedWordsStr) {
-      const parsedData = JSON.parse(savedWordsStr);
-      if (parsedData && typeof parsedData === 'object' && parsedData.forceEmpty === true) {
-        console.log('handleRefresh检测到forceEmpty标志，无法刷新单词');
-        uni.showToast({
-          title: '数据已被清空，无法刷新',
-          icon: 'none',
-          duration: 2000
-        });
-        return;
-      }
-    }
-  } catch (error) {
-    console.error('检查forceEmpty标志失败:', error);
-  }
-  
-  // 显示加载提示
-  uni.showLoading({
-    title: '刷新单词中...',
-    mask: true
-  });
-  
-  // 清除内存缓存
-  if (wordCache[wordId.value]) {
-    console.log(`清除ID为${wordId.value}的缓存`);
-    delete wordCache[wordId.value];
-  }
-  
-  // 延迟执行，给用户一个加载的感觉
-  setTimeout(async () => {
-    uni.hideLoading();
-    
-    try {
-      // 重新加载单词详情
-      console.log('重新从存储加载单词详情');
-      await loadWordDetail(0, 3);
-      
-      uni.showToast({
-        title: '刷新成功',
-        icon: 'success',
-        duration: 1500
-      });
-    } catch (error) {
-      console.error('刷新后重新加载单词详情失败:', error);
-      
-      // 刷新失败的处理
-      uni.showToast({
-        title: '无法刷新单词',
-        icon: 'none',
-        duration: 1500
-      });
-    }
-  }, 1000);
+// 处理刷新
+const handleRefresh = () => {
+  // 此函数已不需要，由删除功能替代
 };
 
-// 搜索相关单词
-const relatedWordSearch = ref('');
-const relatedWordSearchResults = ref([]);
-const isSearchingRelatedWord = ref(false);
+// 处理相关单词编辑
+const handleEditRelated = () => {
+  isEditingRelated.value = true;
+  editFormData.relatedWords = Array.isArray(word.value.relatedWords) 
+    ? JSON.parse(JSON.stringify(word.value.relatedWords))
+    : [];
+};
 
-const searchRelatedWord = async (e) => {
-  const keyword = e?.detail?.value || relatedWordSearch.value;
-  if (!keyword) {
-    relatedWordSearchResults.value = [];
-    return;
-  }
-
+// 保存相关单词编辑
+const handleSaveRelated = async () => {
   try {
-    // 获取所有单词
-    const allWords = await searchWords(keyword);
-    
-    // 过滤掉当前单词和已经添加的相关单词
-    const filteredResults = allWords.filter(w => {
-      // 排除当前单词
-      if (w.id === word.value.id) return false;
-      
-      // 排除已经添加的相关单词
-      const alreadyAdded = editFormData.relatedWords.some(rw => rw.id === w.id);
-      return !alreadyAdded;
+    uni.showLoading({
+      title: '保存中...',
+      mask: true
     });
     
-    relatedWordSearchResults.value = filteredResults;
-  } catch (error) {
-    console.error('搜索相关单词失败:', error);
+    // 获取需要建立双向关联的单词ID列表
+    const originalRelatedWordIds = word.value.relatedWords?.map(w => w.id) || [];
+    const newRelatedWordIds = editFormData.relatedWords.map(w => w.id);
+    
+    // 确定新增的关联单词
+    const addedRelatedWordIds = newRelatedWordIds.filter(id => !originalRelatedWordIds.includes(id));
+    
+    // 确定移除的关联单词
+    const removedRelatedWordIds = originalRelatedWordIds.filter(id => !newRelatedWordIds.includes(id));
+    
+    // 创建更新对象
+    const updatedWord = {
+      ...word.value,
+      relatedWords: editFormData.relatedWords || []
+    };
+    
+    // 更新单词
+    await updateWord(updatedWord.id, updatedWord);
+    
+    // 更新相关单词中的双向关联
+    if (addedRelatedWordIds.length > 0 || removedRelatedWordIds.length > 0) {
+      try {
+        // 为新增关联的单词添加当前单词作为关联
+        for (const relatedWordId of addedRelatedWordIds) {
+          const relatedWord = await getWordById(relatedWordId);
+          if (relatedWord) {
+            // 确保relatedWords数组存在
+            if (!relatedWord.relatedWords) {
+              relatedWord.relatedWords = [];
+            }
+            
+            // 检查是否已经包含当前单词
+            const alreadyLinked = relatedWord.relatedWords.some(w => w.id === word.value.id);
+            
+            if (!alreadyLinked) {
+              // 添加当前单词作为关联单词
+              relatedWord.relatedWords.push({
+                id: word.value.id,
+                name: word.value.name,
+                pos: word.value.pos,
+                meaning: word.value.meaning
+              });
+              
+              // 更新相关单词
+              await updateWord(relatedWord.id, relatedWord);
+              
+              // 清除相关单词的缓存
+              if (wordCache[relatedWordId]) {
+                delete wordCache[relatedWordId];
+              }
+              
+              if (uni.$wordPreloadCache && uni.$wordPreloadCache[relatedWordId]) {
+                delete uni.$wordPreloadCache[relatedWordId];
+              }
+            }
+          }
+        }
+        
+        // 从移除关联的单词中删除当前单词
+        for (const relatedWordId of removedRelatedWordIds) {
+          const relatedWord = await getWordById(relatedWordId);
+          if (relatedWord && relatedWord.relatedWords) {
+            // 移除当前单词
+            relatedWord.relatedWords = relatedWord.relatedWords.filter(w => w.id !== word.value.id);
+            
+            // 更新相关单词
+            await updateWord(relatedWord.id, relatedWord);
+            
+            // 清除相关单词的缓存
+            if (wordCache[relatedWordId]) {
+              delete wordCache[relatedWordId];
+            }
+            
+            if (uni.$wordPreloadCache && uni.$wordPreloadCache[relatedWordId]) {
+              delete uni.$wordPreloadCache[relatedWordId];
+            }
+          }
+        }
+      } catch (err) {
+        console.error('更新相关单词关联关系失败:', err);
+        // 记录错误但继续执行，因为主单词已更新成功
+      }
+    }
+    
+    // 更新本地显示数据
+    word.value = updatedWord;
+    
+    // 清除缓存
+    if (wordCache[wordId.value]) {
+      delete wordCache[wordId.value];
+    }
+    
+    if (uni.$wordPreloadCache && uni.$wordPreloadCache[wordId.value]) {
+      delete uni.$wordPreloadCache[wordId.value];
+    }
+    
+    isEditingRelated.value = false;
+    uni.hideLoading();
     uni.showToast({
-      title: '搜索失败',
+      title: '保存成功',
+      icon: 'success'
+    });
+    
+    // 通知其他页面刷新数据
+    uni.$emit('refreshWordList');
+  } catch (err) {
+    uni.hideLoading();
+    console.error('保存相关单词失败:', err);
+    uni.showToast({
+      title: '保存失败',
       icon: 'none'
     });
   }
 };
 
-const cancelSearchRelatedWord = () => {
-  relatedWordSearch.value = '';
-  relatedWordSearchResults.value = [];
-  isSearchingRelatedWord.value = false;
+// 删除相关单词
+const removeRelatedWord = (index) => {
+  editFormData.relatedWords.splice(index, 1);
 };
 
-// 选择相关单词
-const selectRelatedWord = (selectedWord) => {
-  // 检查是否已经添加了这个单词
-  const alreadyAdded = editFormData.relatedWords.some(rw => rw.id === selectedWord.id);
-  if (alreadyAdded) {
-    uni.showToast({
-      title: '已添加该单词',
-      icon: 'none',
-      duration: 1000
-    });
-    return;
-  }
-
-  // 检查是否添加了当前单词自身
-  if (selectedWord.id === word.value.id) {
-    uni.showToast({
-      title: '不能添加当前单词',
-      icon: 'none',
-      duration: 1000
-    });
-    return;
-  }
-  
-  // 添加到相关单词列表
-  editFormData.relatedWords.push({
-    id: selectedWord.id,
-    name: selectedWord.name,
-    pos: selectedWord.pos,
-    meaning: selectedWord.meaning
-  });
-  
-  // 关闭搜索框
-  relatedWordSearch.value = '';
-  relatedWordSearchResults.value = [];
-  isSearchingRelatedWord.value = false;
-  
-  uni.showToast({
-    title: '添加成功',
-    icon: 'success',
-    duration: 1000
-  });
+// 处理注意事项编辑
+const handleEditNotes = () => {
+  isEditingNotes.value = true;
+  editFormData.notes = Array.isArray(word.value.notes) 
+    ? JSON.parse(JSON.stringify(word.value.notes))
+    : [];
 };
 
-// 显示搜索相关单词弹窗
-const showSearchRelatedWord = () => {
-  isSearchingRelatedWord.value = true;
-  relatedWordSearch.value = '';
-  relatedWordSearchResults.value = [];
-};
-
-const updateWordDetail = (wordData) => {
-  console.log('更新单词详情:', wordData);
-  
-  if (!wordData) {
-    console.error('提供的单词数据为空');
-    loadError.value.show = true;
-    loadError.value.message = '无法加载单词数据';
-    isLoading.value = false;
-    return;
-  }
-  
+// 保存注意事项编辑
+const handleSaveNotes = async () => {
   try {
-    // 设置基本信息
-    word.value = {
-      ...wordData,
-      examples: Array.isArray(wordData.examples) ? wordData.examples : [],
-      relatedWords: Array.isArray(wordData.relatedWords) ? wordData.relatedWords : [],
-      notes: Array.isArray(wordData.notes) ? wordData.notes : []
+    // 验证输入
+    const hasEmptyNotes = editFormData.notes.some(note => !note || note.trim() === '');
+    if (hasEmptyNotes) {
+      // 自动过滤掉空的注意事项
+      editFormData.notes = editFormData.notes.filter(note => note && note.trim() !== '');
+    }
+    
+    uni.showLoading({
+      title: '保存中...',
+      mask: true
+    });
+    
+    // 创建更新对象
+    const updatedWord = {
+      ...word.value,
+      notes: editFormData.notes || []
     };
     
-    // 确保必要的字段存在
-    if (!word.value.id) {
-      console.error('单词数据缺少ID字段');
-      word.value.id = Date.now(); // 为缺失的ID提供一个临时值
+    // 更新单词
+    await updateWord(updatedWord.id, updatedWord);
+    
+    // 更新本地显示数据
+    word.value = updatedWord;
+    
+    // 清除缓存
+    if (wordCache[wordId.value]) {
+      delete wordCache[wordId.value];
     }
     
-    if (!word.value.name) {
-      console.error('单词数据缺少name字段');
-      word.value.name = '未命名单词';
+    if (uni.$wordPreloadCache && uni.$wordPreloadCache[wordId.value]) {
+      delete uni.$wordPreloadCache[wordId.value];
     }
     
-    console.log('单词详情已更新:', word.value);
-    isLoading.value = false;
-    loadError.value.show = false;
-    
-    // 通知其他组件单词已加载
-    uni.$emit('wordDetailLoaded', {
-      id: word.value.id,
-      name: word.value.name
+    isEditingNotes.value = false;
+    uni.hideLoading();
+    uni.showToast({
+      title: '保存成功',
+      icon: 'success'
     });
     
-    // 尝试更新页面标题
-    try {
-      uni.setNavigationBarTitle({
-        title: word.value.name || '单词详情'
-      });
-    } catch (e) {
-      console.error('设置导航栏标题失败:', e);
+    // 通知其他页面刷新数据
+    uni.$emit('refreshWordList');
+  } catch (err) {
+    uni.hideLoading();
+    console.error('保存注意事项失败:', err);
+    uni.showToast({
+      title: '保存失败',
+      icon: 'none'
+    });
+  }
+};
+
+// 设置词性
+const setUsagePos = (usageIndex, pos) => {
+  editFormData.usages[usageIndex].pos = pos;
+};
+
+// 处理加载错误
+const handleLoadError = (error) => {
+  console.error('加载单词详情失败:', error);
+  loadError.value = {
+    show: true,
+    message: error.message || '加载失败',
+    details: '无法加载单词详情，请退出并重新启动应用'
+  };
+  isLoading.value = false;
+};
+
+// 加载单词详情 - 根据ID
+const loadWordById = async (id) => {
+  // ... existing code ...
+  
+  // 替换所有使用mockWords的地方
+  try {
+    // ... existing code ...
+    
+    // 如果没有找到单词，显示错误
+    if (!wordData) {
+      console.error(`ID为${id}的单词不存在`);
+      loadError.value = {
+        show: true,
+        message: '单词不存在',
+        details: `ID为${id}的单词在您的单词库中不存在`
+      };
+      isLoading.value = false;
+      return;
     }
+    
+    // ... existing code ...
   } catch (error) {
-    console.error('更新单词详情时出错:', error);
-    loadError.value.show = true;
-    loadError.value.message = '更新单词详情时出错';
+    handleLoadError(error);
+  }
+};
+
+// 加载初始单词
+const loadInitialWord = async () => {
+  try {
+    const words = await getWordList(true);
+    
+    if (!words || words.length === 0) {
+      console.log('单词库为空');
+      loadError.value = {
+        show: true,
+        message: '单词库为空',
+        details: '您的单词库中没有任何单词'
+      };
+      isLoading.value = false;
+      return;
+    }
+    
+    // 使用第一个单词作为初始单词
+    wordId.value = words[0].id;
+    await loadWordById(wordId.value);
+  } catch (error) {
+    handleLoadError(error);
+  }
+};
+
+// 尝试导航到单词详情
+const navigateToWord = (id) => {
+  try {
+    // ... existing code ...
+  } catch (error) {
+    uni.showModal({
+      title: '导航错误',
+      content: '无法导航到所请求的单词，请退出并重新启动应用',
+      showCancel: false
+    });
+  }
+};
+
+// 添加的函数
+const forceInitialize = () => {
+  // 如果页面依然处于加载状态，可能是卡住了，尝试重新加载
+  if (isLoading.value) {
+    console.log('检测到页面长时间处于加载状态，可能被卡住，尝试恢复');
+    
+    // 显示错误提示，让用户选择重新加载或返回
+    loadError.value = {
+      show: true,
+      message: '加载超时',
+      details: '加载单词数据耗时过长，请重试或退出应用。'
+    };
     isLoading.value = false;
   }
 };
@@ -2077,6 +2004,48 @@ const updateWordDetail = (wordData) => {
   font-weight: 500;
 }
 
+/* 删除按钮样式 */
+.delete-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background-color: rgba(255, 77, 79, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-btn:active {
+  background-color: rgba(255, 77, 79, 0.2);
+  transform: scale(0.95);
+}
+
+.delete-icon {
+  font-size: 18px;
+  color: #ff4d4f;
+}
+
+/* 编辑按钮样式 */
+.edit-btn {
+  font-size: 14px;
+  color: #4F46E5;
+  padding: 3px 8px;
+  background-color: rgba(79, 70, 229, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.save-btn {
+  font-size: 14px;
+  color: #52c41a;
+  padding: 3px 8px;
+  background-color: rgba(82, 196, 26, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
 /* 内容区域 */
 .content-area {
   flex: 1;
@@ -2119,6 +2088,16 @@ const updateWordDetail = (wordData) => {
   border-radius: 2px;
 }
 
+.section-subtitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  margin: 15px 0 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .section-content {
   font-size: 16px;
   color: #666;
@@ -2133,6 +2112,7 @@ const updateWordDetail = (wordData) => {
 /* 例句样式 - 改进 */
 .example-list {
   padding-left: 12px;
+  margin-top: 16px;
 }
 
 .example-item {
@@ -2297,64 +2277,6 @@ const updateWordDetail = (wordData) => {
   100% { background-position: -200% 0; }
 }
 
-/* 操作按钮样式 */
-.actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 36px;
-  padding: 0 12px;
-}
-
-.actions.disabled {
-  opacity: 0.6;
-}
-
-.action-btn {
-  flex: 1;
-  height: 44px;
-  border-radius: 22px;
-  font-size: 16px;
-  margin: 0 12px;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.action-btn[disabled] {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.edit {
-  background-color: #4F46E5;
-  color: #fff;
-  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.3);
-}
-
-.delete {
-  background-color: #fff;
-  color: #ff4d4f;
-  border: 1px solid #ff4d4f;
-}
-
-.btn-hover {
-  opacity: 0.9;
-  transform: scale(0.98);
-}
-
-/* 确保scrollbar不影响布局 */
-::-webkit-scrollbar {
-  width: 4px;
-  background-color: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: rgba(79, 70, 229, 0.2);
-  border-radius: 2px;
-}
-
 /* 错误提示样式 */
 .error-container {
   display: flex;
@@ -2428,30 +2350,6 @@ const updateWordDetail = (wordData) => {
   color: #555;
 }
 
-/* 添加刷新按钮样式 */
-.refresh-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
-  background-color: rgba(79, 70, 229, 0.1);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.refresh-btn:active {
-  background-color: rgba(79, 70, 229, 0.2);
-  transform: scale(0.95);
-}
-
-.refresh-icon {
-  font-size: 22px;
-  color: #4F46E5;
-  font-weight: bold;
-}
-
 /* 添加空模块样式 */
 .empty-module {
   padding: 15px;
@@ -2487,6 +2385,7 @@ const updateWordDetail = (wordData) => {
   font-size: 16px;
   color: #333;
   background-color: #fff;
+  margin-bottom: 8px;
 }
 
 .edit-input {
@@ -2503,8 +2402,7 @@ const updateWordDetail = (wordData) => {
 
 .add-btn {
   font-size: 14px;
-  color: #4F46E5;
-  margin-left: auto;
+  color: #1677ff;
   cursor: pointer;
 }
 
@@ -2556,16 +2454,6 @@ const updateWordDetail = (wordData) => {
   color: #ff4d4f;
   font-size: 14px;
   cursor: pointer;
-}
-
-/* 保存和取消按钮 */
-.action-btn.save {
-  background-color: #52c41a;
-}
-
-.action-btn.cancel {
-  background-color: #f5f5f5;
-  color: #666;
 }
 
 /* 搜索相关单词样式 */
@@ -2657,5 +2545,82 @@ const updateWordDetail = (wordData) => {
   padding: 20px;
   background-color: #f8f9fc;
   border-radius: 8px;
+}
+
+/* 确保scrollbar不影响布局 */
+::-webkit-scrollbar {
+  width: 4px;
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(79, 70, 229, 0.2);
+  border-radius: 2px;
+}
+
+.usage-item {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px dashed #eaeaea;
+}
+
+.usage-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.usage-edit-item {
+  margin-bottom: 25px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  position: relative;
+}
+
+.usage-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.usage-number {
+  font-weight: bold;
+  color: #666;
+}
+
+.usage-delete {
+  color: #ff4d4f;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.example-subtitle {
+  margin-top: 15px;
+}
+
+.usage-pos {
+  display: inline-block;
+  font-size: 12px;
+  color: #4F46E5;
+  background-color: rgba(79, 70, 229, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.usage-pos-selection {
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  padding: 8px;
+}
+
+.pos-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 10px;
 }
 </style> 

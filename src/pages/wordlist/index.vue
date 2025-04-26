@@ -45,7 +45,7 @@
               @click="handleWordClick(word)"
             >
               <view class="word-name">{{ word.name }}</view>
-              <view class="word-meaning"><text class="word-pos">{{ word.pos }}</text> {{ word.meaning }}</view>
+              <view class="word-meaning">{{ word.meaning }}</view>
             </view>
           </view>
         </view>
@@ -88,8 +88,8 @@
     <loading-error 
       :show="showError" 
       :message="errorMessage" 
-      @retry="handleRetry"
-      @dismiss="dismissError"
+      @retry="loadWordList"
+      @dismiss="showError = false"
     />
   </view>
 </template>
@@ -102,35 +102,6 @@ import { onLoad, onShow, onHide as pageHide } from '@/utils/uni-hooks.js';
 
 // 导入mockWords和STORAGE_KEY常量
 const STORAGE_KEY = 'reciter_words';
-const mockWords = [
-  { id: 1, name: 'apple', pos: 'n.', meaning: '苹果' },
-  { id: 2, name: 'banana', pos: 'n.', meaning: '香蕉' },
-  { id: 3, name: 'book', pos: 'n.', meaning: '书籍' },
-  { id: 4, name: 'cat', pos: 'n.', meaning: '猫' },
-  { id: 5, name: 'dog', pos: 'n.', meaning: '狗' },
-  { id: 6, name: 'eat', pos: 'v.', meaning: '吃' },
-  { id: 7, name: 'friend', pos: 'n.', meaning: '朋友' },
-  { id: 8, name: 'go', pos: 'v.', meaning: '去' },
-  { id: 9, name: 'happy', pos: 'adj.', meaning: '快乐的' },
-  { id: 10, name: 'in', pos: 'prep.', meaning: '在...里' },
-  { id: 11, name: 'jump', pos: 'v.', meaning: '跳跃' },
-  { id: 12, name: 'kind', pos: 'adj.', meaning: '友善的' },
-  { id: 13, name: 'love', pos: 'v./n.', meaning: '爱；喜爱' },
-  { id: 14, name: 'moon', pos: 'n.', meaning: '月亮' },
-  { id: 15, name: 'nice', pos: 'adj.', meaning: '好的；友好的' },
-  { id: 16, name: 'open', pos: 'v./adj.', meaning: '打开；开着的' },
-  { id: 17, name: 'pen', pos: 'n.', meaning: '钢笔' },
-  { id: 18, name: 'question', pos: 'n.', meaning: '问题' },
-  { id: 19, name: 'run', pos: 'v.', meaning: '跑' },
-  { id: 20, name: 'sun', pos: 'n.', meaning: '太阳' },
-  { id: 21, name: 'time', pos: 'n.', meaning: '时间' },
-  { id: 22, name: 'umbrella', pos: 'n.', meaning: '雨伞' },
-  { id: 23, name: 'very', pos: 'adv.', meaning: '非常' },
-  { id: 24, name: 'water', pos: 'n.', meaning: '水' },
-  { id: 25, name: 'xylophone', pos: 'n.', meaning: '木琴' },
-  { id: 26, name: 'yellow', pos: 'adj.', meaning: '黄色的' },
-  { id: 27, name: 'zoo', pos: 'n.', meaning: '动物园' },
-];
 
 // 单词数据
 const wordList = ref([]);
@@ -541,8 +512,6 @@ onMounted(() => {
         // 仅在真正的错误情况下才考虑恢复
         if (wordList.value.length === 0 && event.message && !event.message.includes('forceEmpty')) {
           console.log('尝试恢复基本功能，但不自动填充默认单词');
-          // 不再自动填充默认单词
-          // wordList.value = [...mockWords];
         }
       }
       
@@ -703,13 +672,6 @@ onMounted(() => {
 .word-meaning {
   font-size: 14px;
   color: #666;
-}
-
-.word-pos {
-  font-size: 12px;
-  color: #888;
-  margin-right: 5px;
-  display: inline-block;
 }
 
 /* 字母提示 */

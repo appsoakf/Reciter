@@ -395,23 +395,7 @@ export const updateWord = (id, updatedWord) => {
           uni.$wordPreloadCache = {};
         }
         
-        // 3. 尝试清除页面缓存
-        try {
-          console.log('尝试清除页面缓存');
-          uni.navigateBack({
-            delta: 0, // 重新加载当前页面
-            success: () => {
-              console.log('成功重新加载当前页面');
-            },
-            fail: (err) => {
-              console.log('页面重新加载失败，可能在非导航上下文中:', err);
-            }
-          });
-        } catch (cacheErr) {
-          console.log('清除页面缓存失败，这是正常的，如果不在导航上下文中', cacheErr);
-        }
-        
-        // 发出单词更新通知
+        // 3. 发出单词更新通知 (移除了导致页面跳转的navigateBack调用)
         try {
           console.log('发出单词更新事件通知');
           uni.$emit('word-updated', { id: numId, word: updatedWord });
