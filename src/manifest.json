@@ -2,8 +2,8 @@
     "name" : "Reciter",
     "appid" : "__UNI__C40204F",
     "description" : "离线单词学习应用",
-    "versionName" : "1.0.8",
-    "versionCode" : 108,
+    "versionName" : "1.0.9",
+    "versionCode" : 109,
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,
