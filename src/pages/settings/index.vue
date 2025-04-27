@@ -324,8 +324,8 @@ function initAndroidFileOperations() {
                       } finally {
                         // 关闭资源
                         try {
-                          if (writer) writer.close();
-                          if (outputStream) outputStream.close();
+                          if (writer) plus.android.invoke(writer, "close");
+                          if (outputStream) plus.android.invoke(outputStream, "close");
                         } catch (closeError) {
                           console.error('关闭输出流错误:', closeError);
                         }
@@ -414,8 +414,8 @@ function initAndroidFileOperations() {
                         } finally {
                           // 关闭资源
                           try {
-                            if (writer) writer.close();
-                            if (outputStream) outputStream.close();
+                            if (writer) plus.android.invoke(writer, "close");
+                            if (outputStream) plus.android.invoke(outputStream, "close");
                           } catch (closeError) {
                             console.error('关闭输出流错误:', closeError);
                           }
