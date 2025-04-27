@@ -33,10 +33,14 @@
         :show-scrollbar="true"
         :refresher-enabled="true"
         :refresher-triggered="isRefreshing"
+        :refresher-threshold="80"
+        :refresher-background="'#f5f7fa'"
+        :scroll-top="scrollTop"
         @refresherpulling="onPulling"
         @refresherrefresh="onRefresh"
         @refresherrestore="onRestore"
         @refresherabort="onAbort"
+        @scrolltolower="onScrollToLower"
       >
         <!-- 检查错误记录列表是否有数据 -->
         <template v-if="errorList && errorList.length > 0">
@@ -69,6 +73,11 @@
           <image src="/static/images/empty.png" mode="aspectFit"></image>
           <text>没有找到匹配的错误记录</text>
           <button class="small-btn" @click="clearSearch">清除搜索</button>
+        </view>
+        
+        <!-- 底部加载状态 -->
+        <view class="loading-more" v-if="errorList.length > 0">
+          <text>- 已经到底了 -</text>
         </view>
       </scroll-view>
     </view>
@@ -173,6 +182,7 @@ export default {
     const searchText = ref('');
     const isLoading = ref(false);
     const isRefreshing = ref(false);
+    const scrollTop = ref(0); // 控制滚动位置
     
     // 过滤后的错误列表
     const filteredErrorList = ref([]);
@@ -220,27 +230,29 @@ export default {
 
     // 滚动事件处理
     const onScroll = (e) => {
-      // 滚动监听，暂不实现特殊效果
+      // 记录滚动位置，便于回到同一位置
+      const scrollTop = e.detail.scrollTop;
+      // 可以根据滚动位置添加一些UI交互
+      if (scrollTop > 100) {
+        // 滚动超过一定距离可以添加回到顶部按钮等功能
+      }
     };
 
     // 下拉刷新处理
     const onPulling = () => {
-      console.log('用户下拉中...');
+      // 用户下拉中
     };
 
     const onRefresh = () => {
-      console.log('触发刷新');
       isRefreshing.value = true;
       loadData();
     };
 
     const onRestore = () => {
-      console.log('刷新完成，控件恢复');
       isRefreshing.value = false;
     };
 
     const onAbort = () => {
-      console.log('用户终止了刷新');
       isRefreshing.value = false;
     };
 
@@ -268,24 +280,20 @@ export default {
     const loadData = async () => {
       if (isLoading.value) return;
       
-      console.log('开始加载错误记录数据...');
       isLoading.value = true;
       try {
         // 从错误记录服务获取数据，使用Promise接口
-        console.log('调用错误记录服务 getErrorList()...');
         const data = await ErrorBook.getErrorList();
-        console.log('收到错误记录数据:', data);
-        
-        // 检查数据结构
-        if (data && data.length > 0) {
-          console.log('第一条错误记录示例:', JSON.stringify(data[0]));
-        }
         
         errorList.value = data;
         // 初始化过滤列表
         filteredErrorList.value = data;
-        console.log('加载了错误本数据，条数:', data.length);
         updateHomePageCount();
+        
+        // 重置滚动位置
+        setTimeout(() => {
+          scrollTop.value = 0;
+        }, 300);
       } catch (err) {
         console.error('加载错误本数据失败:', err);
         showError.value = true;
@@ -308,19 +316,15 @@ export default {
         // 设置错误本计数
         globalData.errorBookCount = errorList.value.length;
         
-        console.log(`已更新主页错误本计数: ${oldCount} -> ${globalData.errorBookCount}`);
-        
         // 尝试触发UI更新（如果有相关事件机制）
         if (typeof globalData.updateCounters === 'function') {
           globalData.updateCounters();
-          console.log('已触发全局计数器更新');
         }
         
         // 额外保障措施：通过事件通知首页更新
         uni.$emit('errorbook-count-updated', {
           count: errorList.value.length
         });
-        console.log('已发送错题本计数更新事件');
       } catch (err) {
         console.error('更新主页错误本计数失败:', err);
       }
@@ -330,6 +334,8 @@ export default {
     const clearSearch = async () => {
       searchText.value = '';
       filteredErrorList.value = errorList.value;
+      // 重置滚动位置
+      scrollTop.value = 0;
     };
 
     // 编辑错误
@@ -384,7 +390,6 @@ export default {
             filteredErrorList.value = filteredErrorList.value.filter(item => item.id !== currentError.value.id);
             // 立即更新首页计数
             updateHomePageCount();
-            console.log('本地数据和首页计数已更新');
           }
           
           // 然后再重新加载以保证数据一致性
@@ -439,7 +444,6 @@ export default {
               }
               // 立即更新首页计数
               updateHomePageCount();
-              console.log('已添加新记录并更新首页计数');
             }
             
             uni.showToast({
@@ -466,7 +470,6 @@ export default {
               if (filteredIndex !== -1) {
                 filteredErrorList.value[filteredIndex] = { ...currentError.value };
               }
-              console.log('已更新本地记录');
             }
             
             uni.showToast({
@@ -504,6 +507,13 @@ export default {
     const loadErrorBook = () => {
       showError.value = false;
       loadData();
+    };
+
+    // 滚动到底部触发事件
+    const onScrollToLower = () => {
+      console.log('滚动到底部');
+      // 这里可以实现分页加载，当前暂不实现
+      // 如果数据量大，可以考虑只加载部分数据，然后在滚动到底部时加载更多
     };
 
     // 初始化
@@ -555,6 +565,7 @@ export default {
       searchText,
       isLoading,
       isRefreshing,
+      scrollTop,
       showAddModal,
       showEditModal,
       showDetailModal,
@@ -577,6 +588,7 @@ export default {
       onRefresh,
       onRestore,
       onAbort,
+      onScrollToLower,
       loadErrorBook
     };
   }
@@ -588,6 +600,8 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  background-color: #f5f7fa;
+  overflow: hidden; /* 防止整个页面出现滚动条 */
 }
 
 .content-container {
@@ -595,6 +609,7 @@ export default {
   padding: 10px;
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* 防止整个内容区域出现滚动条 */
 }
 
 .search-bar {
@@ -639,6 +654,9 @@ export default {
 
 .error-list {
   flex: 1;
+  height: calc(100vh - 120px); /* 减去搜索栏和按钮栏的高度 */
+  position: relative;
+  -webkit-overflow-scrolling: touch; /* 增强iOS滚动体验 */
 }
 
 .error-item {
@@ -648,6 +666,9 @@ export default {
   padding: 15px;
   display: flex;
   border-left: 4px solid #4F46E5;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  will-change: transform; /* 性能优化 */
+  transform: translateZ(0); /* 启用GPU加速 */
 }
 
 .error-content {
@@ -855,5 +876,12 @@ export default {
   font-weight: bold;
   margin-top: 10px;
   color: #dc2626;
+}
+
+.loading-more {
+  text-align: center;
+  padding: 15px 0;
+  color: #999;
+  font-size: 12px;
 }
 </style> 

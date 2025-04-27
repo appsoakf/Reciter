@@ -30,7 +30,16 @@
         :scroll-with-animation="true"
         :enable-back-to-top="true"
         :show-scrollbar="true"
-        :refresher-enabled="false"
+        :refresher-enabled="true"
+        :refresher-triggered="isRefreshing"
+        :refresher-threshold="80"
+        :refresher-background="'#f5f7fa'"
+        :scroll-top="scrollTop"
+        @refresherpulling="onPulling"
+        @refresherrefresh="onRefresh"
+        @refresherrestore="onRestore"
+        @refresherabort="onAbort"
+        @scrolltolower="onScrollToLower"
       >
         <view v-if="filteredWords.length > 0">
           <view v-for="(group, letter) in groupedWords" :key="letter" :id="'letter-'+letter">
@@ -62,6 +71,11 @@
           <image src="/static/images/empty.png" mode="aspectFit"></image>
           <text>没有找到匹配的单词</text>
           <button class="small-btn" @click="clearSearch">清除搜索</button>
+        </view>
+        
+        <!-- 底部加载状态 -->
+        <view class="loading-more" v-if="filteredWords.length > 0">
+          <text>- 已经到底了 -</text>
         </view>
       </scroll-view>
     </view>
@@ -95,7 +109,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { getWordList, getWordListSync, searchWords } from '@/services/word.js';
 import LoadingError from '@/components/LoadingError.vue';
 import { onLoad, onShow, onHide as pageHide } from '@/utils/uni-hooks.js';
@@ -106,6 +120,8 @@ const STORAGE_KEY = 'reciter_words';
 // 单词数据
 const wordList = ref([]);
 const isLoading = ref(false); // 添加加载状态标记
+const isRefreshing = ref(false); // 下拉刷新状态
+const scrollTop = ref(0); // 控制滚动位置
 
 // 错误处理状态
 const showError = ref(false);
@@ -189,11 +205,19 @@ let scrollTimer = null; // 添加滚动节流计时器
 
 // 滚动时检测当前字母区域
 const onScroll = (e) => {
+  // 记录滚动位置，便于回到同一位置
+  const scrollPosition = e.detail.scrollTop;
+  
   // 滚动时不需要特殊处理，只需要简单防抖即可
   if (scrollTimer) return;
   
   scrollTimer = setTimeout(() => {
     scrollTimer = null;
+    // 可以根据滚动位置添加一些UI交互
+    if (scrollPosition > 100) {
+      // 滚动超过一定距离可以添加回到顶部按钮等功能
+      // console.log('页面滚动超过100px');
+    }
   }, 100);
 };
 
@@ -236,6 +260,8 @@ const handleSearch = (e) => {
 // 清除搜索
 const clearSearch = () => {
   searchKeyword.value = '';
+  // 重置滚动位置
+  scrollTop.value = 0;
 };
 
 // 处理单词点击，跳转到详情页
@@ -262,10 +288,10 @@ const handleWordClick = (word) => {
     return;
   }
   
-  console.log('点击单词:', word.name);
+  // console.log('点击单词:', word.name);
   
   // 更新为详细记录跳转信息
-  console.log('准备跳转到单词详情页, ID:', word.id, '类型:', typeof word.id);
+  // console.log('准备跳转到单词详情页, ID:', word.id, '类型:', typeof word.id);
   
   // 预先缓存单词数据到全局对象，加速详情页加载
   if (typeof uni.$wordPreloadCache === 'undefined') {
@@ -275,7 +301,7 @@ const handleWordClick = (word) => {
   
   // 尝试使用数字ID
   const numId = parseInt(word.id, 10);
-  console.log('转换后的ID:', numId, '类型:', typeof numId);
+  // console.log('转换后的ID:', numId, '类型:', typeof numId);
   
   // 确保ID是有效数字
   if (isNaN(numId)) {
@@ -305,13 +331,13 @@ const navigateToDetail = (id) => {
   
   // 使用更完整的URL构造
   const url = `/pages/worddetail/index?id=${numId}`;
-  console.log('跳转URL:', url);
+  // console.log('跳转URL:', url);
   
   try {
     uni.navigateTo({
       url: url,
       success: () => {
-        console.log('成功跳转到单词详情页, ID:', numId);
+        // console.log('成功跳转到单词详情页, ID:', numId);
       },
       fail: (err) => {
         console.error('跳转失败:', err);
@@ -322,10 +348,10 @@ const navigateToDetail = (id) => {
         
         // 尝试使用redirectTo
         setTimeout(() => {
-          console.log('尝试使用redirectTo方式跳转');
+          // console.log('尝试使用redirectTo方式跳转');
           uni.redirectTo({
             url: url,
-            success: () => console.log('redirectTo成功'),
+            success: () => {/* console.log('redirectTo成功') */},
             fail: (err2) => console.error('redirectTo也失败:', err2)
           });
         }, 500);
@@ -343,7 +369,7 @@ const navigateToDetail = (id) => {
 // 加载数据函数 - 增加节流保护
 const loadData = () => {
   if (isLoading.value) {
-    console.log('加载操作正在进行中，跳过重复加载');
+    // console.log('加载操作正在进行中，跳过重复加载');
     return;
   }
   
@@ -376,42 +402,50 @@ const loadData = () => {
       
       // 记录数据状态
       if (wordsArray.length > 0) {
-        console.log('成功加载单词数据，数量:', wordsArray.length);
+        // console.log('成功加载单词数据，数量:', wordsArray.length);
       } else {
-        console.log('单词列表为空');
+        // console.log('单词列表为空');
       }
       
       uni.hideLoading();
       isLoading.value = false; // 重置加载状态
+      isRefreshing.value = false; // 重置刷新状态
+      
+      // 重置滚动位置
+      setTimeout(() => {
+        scrollTop.value = 0;
+      }, 300);
     }).catch(err => {
       console.error('获取单词列表出错:', err);
       // 出错时不自动填充默认数据
       uni.hideLoading();
       isLoading.value = false; // 重置加载状态
+      isRefreshing.value = false; // 重置刷新状态
     });
   } catch (err) {
     console.error('加载单词列表数据错误:', err);
     uni.hideLoading();
     isLoading.value = false; // 重置加载状态
+    isRefreshing.value = false; // 重置刷新状态
   }
 };
 
 // 错误重试处理
 const handleRetry = () => {
-  console.log('用户点击重试');
+  // console.log('用户点击重试');
   showError.value = false;
   loadData();
 };
 
 // 解除错误状态但不重新加载数据
 const dismissError = () => {
-  console.log('用户选择继续使用应用');
+  // console.log('用户选择继续使用应用');
   showError.value = false;
 };
 
 // 每次页面显示时重新加载数据
 onShow(() => {
-  console.log('单词列表页面显示');
+  // console.log('单词列表页面显示');
   // 每次显示页面时重新加载数据
   loadData();
 });
@@ -430,9 +464,9 @@ onLoad((options) => {
         // 只有当真正有数据时才更新列表，保持空数据状态
         if (Array.isArray(words) && words.length > 0) {
           wordList.value = words;
-          console.log('预加载完成，数据数量:', words.length);
+          // console.log('预加载完成，数据数量:', words.length);
         } else {
-          console.log('预加载完成，数据为空，保持空列表状态');
+          // console.log('预加载完成，数据为空，保持空列表状态');
         }
       }).catch(err => {
         console.error('预加载出错:', err);
@@ -449,14 +483,14 @@ onLoad((options) => {
 // 添加缓存清理函数
 const clearPreloadCache = () => {
   if (typeof uni.$wordPreloadCache !== 'undefined') {
-    console.log('清理全局单词预加载缓存');
+    // console.log('清理全局单词预加载缓存');
     uni.$wordPreloadCache = {};
   }
 };
 
 // 在组件卸载时清除事件监听和缓存，防止内存泄漏
-onUnmounted(() => {
-  console.log('单词列表页面卸载');
+onBeforeUnmount(() => {
+  // console.log('单词列表页面卸载');
   
   if (typeof window !== 'undefined') {
     window.removeEventListener('error', errorHandler, true);
@@ -479,64 +513,46 @@ onUnmounted(() => {
 
 // 当页面隐藏时清理缓存
 pageHide(() => {
-  console.log('单词列表页面隐藏');
+  // console.log('单词列表页面隐藏');
   clearPreloadCache();
 });
 
 onMounted(() => {
-  console.log('单词列表页面已挂载');
+  // console.log('单词列表页面已挂载');
   
   // 添加刷新事件监听
   uni.$on('refreshWordList', (data) => {
-    console.log('接收到刷新单词列表事件:', data);
+    // console.log('接收到刷新单词列表事件:', data);
     // 立即重新加载数据
     wordList.value = []; // 先清空当前列表
     loadData(); // 然后重新加载数据
   });
   
   // 注册全局错误处理器，防止页面崩溃
+  const errorHandler = (event) => {
+    console.error('捕获到页面错误:', event.message);
+    event.preventDefault();
+    
+    // 避免显示错误弹窗，而是使用toast
+    if (!showError.value) {
+      uni.showToast({
+        title: '发生了一些问题，正在恢复...',
+        icon: 'none',
+        duration: 2000
+      });
+      
+      // 移除自动恢复默认单词的逻辑，防止清空数据后被重新填充
+      // 仅在真正的错误情况下才考虑恢复
+      if (wordList.value.length === 0 && event.message && !event.message.includes('forceEmpty')) {
+        // console.log('尝试恢复基本功能，但不自动填充默认单词');
+      }
+    }
+    
+    return true;
+  };
+  
   if (typeof window !== 'undefined') {
-    const errorHandler = (event) => {
-      console.error('捕获到页面错误:', event.message);
-      event.preventDefault();
-      
-      // 避免显示错误弹窗，而是使用toast
-      if (!showError.value) {
-        uni.showToast({
-          title: '发生了一些问题，正在恢复...',
-          icon: 'none',
-          duration: 2000
-        });
-        
-        // 移除自动恢复默认单词的逻辑，防止清空数据后被重新填充
-        // 仅在真正的错误情况下才考虑恢复
-        if (wordList.value.length === 0 && event.message && !event.message.includes('forceEmpty')) {
-          console.log('尝试恢复基本功能，但不自动填充默认单词');
-        }
-      }
-      
-      return true;
-    };
-    
     window.addEventListener('error', errorHandler, true);
-    
-    // 组件卸载时清除事件监听，防止内存泄漏
-    onUnmounted(() => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('error', errorHandler, true);
-      }
-      
-      // 清除refresh事件监听
-      uni.$off('refreshWordList');
-      
-      // 清除所有定时器
-      if (letterTipTimer) clearTimeout(letterTipTimer);
-      if (scrollTimer) clearTimeout(scrollTimer);
-      if (searchDebounceTimer.value) clearTimeout(searchDebounceTimer.value);
-      
-      // 清除缓存
-      wordListGroupCache = null;
-    });
   }
   
   // 如果没有数据，尝试加载
@@ -544,6 +560,34 @@ onMounted(() => {
     loadData();
   }
 });
+
+// 下拉刷新处理
+const onPulling = () => {
+  // console.log('用户下拉中...');
+};
+
+const onRefresh = () => {
+  // console.log('触发刷新');
+  isRefreshing.value = true;
+  loadData();
+};
+
+const onRestore = () => {
+  // console.log('刷新完成，控件恢复');
+  isRefreshing.value = false;
+};
+
+const onAbort = () => {
+  // console.log('用户终止了刷新');
+  isRefreshing.value = false;
+};
+
+// 滚动到底部处理
+const onScrollToLower = () => {
+  // console.log('滚动到底部');
+  // 这里可以实现分页加载，当前暂不实现
+  // 如果数据量大，可以考虑只加载部分数据，然后在滚动到底部时加载更多
+};
 </script>
 
 <style>
@@ -553,7 +597,7 @@ onMounted(() => {
   height: 100vh;
   position: relative;
   background-color: #f8f8f8;
-  overflow: hidden;
+  overflow: hidden; /* 防止整个页面出现滚动条 */
 }
 
 .content-container {
@@ -561,7 +605,7 @@ onMounted(() => {
   flex-direction: column;
   flex: 1;
   height: 100%;
-  overflow: hidden;
+  overflow: hidden; /* 防止整个内容区域出现滚动条 */
   position: relative;
 }
 
@@ -637,6 +681,7 @@ onMounted(() => {
   flex: 1;
   height: calc(100% - 56px); /* 减去搜索框高度 */
   position: relative;
+  -webkit-overflow-scrolling: touch; /* 增强iOS滚动体验 */
 }
 
 .letter-title {
@@ -655,11 +700,14 @@ onMounted(() => {
   background-color: #fff;
   margin-bottom: 1px;
   border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  will-change: transform; /* 性能优化 */
+  transform: translateZ(0); /* 启用GPU加速 */
 }
 
 .word-item:active {
   background-color: #f5f5f5;
+  transform: scale(0.98);
 }
 
 .word-name {
@@ -739,5 +787,14 @@ onMounted(() => {
   border: none;
   border-radius: 5px;
   font-size: 14px;
+}
+
+/* 底部加载状态样式 */
+.loading-more {
+  text-align: center;
+  padding: 15px 0;
+  color: #999;
+  font-size: 12px;
+  margin-bottom: env(safe-area-inset-bottom);
 }
 </style> 

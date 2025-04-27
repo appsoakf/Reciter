@@ -150,7 +150,6 @@ const navigateTo = (url) => {
 
 const loadWordCount = async () => {
   try {
-    console.log('加载单词列表数量...');
     // 先清除可能存在的缓存
     if (typeof uni.$wordPreloadCache !== 'undefined') {
       uni.$wordPreloadCache = {};
@@ -161,7 +160,6 @@ const loadWordCount = async () => {
     
     if (Array.isArray(words)) {
       wordCount.value = words.length;
-      console.log('获取到单词数量:', wordCount.value);
     } else {
       console.warn('获取到的单词数据格式异常');
       wordCount.value = 0;
@@ -174,13 +172,10 @@ const loadWordCount = async () => {
 
 const loadErrorCount = async () => {
   try {
-    console.log('开始加载错题本数量');
     const errors = await getErrorList();
-    console.log('获取到错题数据:', JSON.stringify(errors));
     
     if (Array.isArray(errors)) {
       errorCount.value = errors.length;
-      console.log('设置错题数量为:', errorCount.value);
     } else {
       console.warn('获取到的错题数据不是数组');
       errorCount.value = 0;
@@ -268,30 +263,23 @@ onMounted(() => {
   
   // 添加错题本计数更新事件监听器
   uni.$on('errorbook-count-updated', (data) => {
-    console.log('接收到错题本计数更新事件:', data);
     if (data && typeof data.count === 'number') {
       errorCount.value = data.count;
-      console.log('首页错题本计数已更新为:', errorCount.value);
     }
   });
   
   // 添加单词数量更新事件监听器
   uni.$on('words-count-updated', (data) => {
-    console.log('接收到单词数量更新事件:', data);
-    
     // 直接使用事件提供的count值，避免调用loadWordCount产生循环依赖
     if (data && typeof data.count === 'number') {
       wordCount.value = data.count;
-      console.log('首页单词数量已直接更新为:', wordCount.value);
     } else {
       // 仅当没有传递count时才手动加载
-      console.log('事件没有提供count值，手动加载单词数量');
       // 使用getWordListSync避免触发事件
       try {
         const words = getWordListSync();
         if (Array.isArray(words)) {
           wordCount.value = words.length;
-          console.log('手动加载的单词数量:', wordCount.value);
         }
       } catch (err) {
         console.error('手动加载单词数量失败:', err);

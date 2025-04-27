@@ -258,7 +258,6 @@ export default {
         
         // 如果超过5秒没有操作，检查页面状态
         if (timeSinceLastAction > UNLOCK_TIMEOUT) {
-          console.log('检测到可能的UI锁定，尝试恢复...');
           this.checkAndUnlockUI();
         }
       }, 2000); // 每2秒检查一次
@@ -306,11 +305,8 @@ export default {
         const pages = getCurrentPages();
         const currentPage = pages[pages.length - 1];
         
-        console.log('当前页面路径:', currentPage ? currentPage.route : '未知页面');
-        
         if (currentPage && currentPage.route) {
           // 检查所有页面，不限于单词列表页面
-          console.log('检查页面是否存在错误弹窗');
           
           // 尝试关闭可能的错误弹窗
           if (currentPage.$vm) {
@@ -350,8 +346,6 @@ export default {
           
           // 如果是单词列表页面，进行特殊处理
           if (currentPage.route.includes('wordlist')) {
-            console.log('对单词列表页面进行特殊处理');
-            
             // 尝试刷新页面
             if (typeof uni.startPullDownRefresh === 'function') {
               uni.startPullDownRefresh();

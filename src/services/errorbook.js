@@ -21,7 +21,6 @@ export const getErrorList = () => {
       
       // 如果没有存储数据，返回空数组
       if (!savedErrors) {
-        console.log('本地存储中没有错误记录数据，返回空数组');
         resolve([]);
         return;
       }
@@ -31,8 +30,6 @@ export const getErrorList = () => {
         
         // 检查解析后的数据是否为数组
         if (Array.isArray(parsedData)) {
-          console.log('读取到错误记录数据，长度:', parsedData.length);
-          
           // 转换数据格式 - 兼容旧版数据结构（title/desc）和新版（content/translation）
           const normalizedData = parsedData.map(item => {
             // 创建标准化的数据对象
@@ -51,7 +48,6 @@ export const getErrorList = () => {
             };
           });
           
-          console.log('数据格式标准化完成，返回错误记录');
           resolve(normalizedData);
           return;
         }
@@ -81,7 +77,6 @@ export const getErrorListSync = () => {
     
     // 如果没有存储数据，返回空数组
     if (!savedErrors) {
-      console.log('同步方法：本地存储中没有错误记录数据，返回空数组');
       return [];
     }
     
@@ -90,8 +85,6 @@ export const getErrorListSync = () => {
       
       // 检查解析后的数据是否为数组
       if (Array.isArray(parsedData)) {
-        console.log('同步方法读取到错误记录数据，长度:', parsedData.length);
-        
         // 转换数据格式 - 兼容旧版数据结构（title/desc）和新版（content/translation）
         const normalizedData = parsedData.map(item => {
           // 创建标准化的数据对象
@@ -140,12 +133,6 @@ export const getErrorById = (id) => {
       // 查找对应ID的错误记录
       const error = errors.find(item => item.id === id) || null;
       
-      if (error) {
-        console.log('找到错误记录:', id);
-      } else {
-        console.log('未找到错误记录:', id);
-      }
-      
       resolve(error);
     } catch (error) {
       console.error('获取错误记录详情失败:', error);
@@ -193,7 +180,6 @@ export const addError = (error) => {
       
       // 保存到本地存储
       uni.setStorageSync(ERROR_BOOK_KEY, JSON.stringify(errorList));
-      console.log('添加错误记录成功, ID:', newError.id);
       
       resolve(newError);
     } catch (error) {

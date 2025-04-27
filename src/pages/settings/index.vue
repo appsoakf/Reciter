@@ -79,12 +79,25 @@
         </view>
       </view>
     </view>
+    
+    <!-- 导入进度弹窗 -->
+    <import-progress-modal
+      :visible="importProgress.visible"
+      :title="importProgress.title"
+      :current-step="importProgress.currentStep"
+      :completed-count="importProgress.completedCount"
+      :total-count="importProgress.totalCount"
+      :message="importProgress.message"
+      :show-cancel="importProgress.showCancel"
+      @cancel="cancelImport"
+    />
   </view>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import * as ErrorBook from '@/services/errorbook';
+import ImportProgressModal from '@/components/ImportProgressModal.vue';
 
 // 定义一个全局变量用于存储文件数据，在Activity回调中使用
 let pendingDataForExport = null;
@@ -186,19 +199,22 @@ function initAndroidFileOperations() {
                   
                   const ContentResolver = plus.android.importClass('android.content.ContentResolver');
                   const resolver = main.getContentResolver();
-                  const inputStream = resolver.openInputStream(uri);
+                  let inputStream = null;
+                  let reader = null;
                   
-                  if (inputStream) {
-                    const BufferedReader = plus.android.importClass('java.io.BufferedReader');
-                    const InputStreamReader = plus.android.importClass('java.io.InputStreamReader');
-                    const reader = new BufferedReader(new InputStreamReader(inputStream, 'UTF-8'));
+                  try {
+                    inputStream = resolver.openInputStream(uri);
                     
-                    const StringBuilder = plus.android.importClass('java.lang.StringBuilder');
-                    const sb = new StringBuilder();
-                    let line;
-                    
-                    try {
-                      while ((line = reader.readLine()) != null) {
+                    if (inputStream) {
+                      const BufferedReader = plus.android.importClass('java.io.BufferedReader');
+                      const InputStreamReader = plus.android.importClass('java.io.InputStreamReader');
+                      reader = new BufferedReader(new InputStreamReader(inputStream, 'UTF-8'));
+                      
+                      const StringBuilder = plus.android.importClass('java.lang.StringBuilder');
+                      const sb = new StringBuilder();
+                      let line;
+                      
+                      while ((line = reader.readLine()) !== null) {
                         sb.append(line);
                       }
                       
@@ -217,22 +233,36 @@ function initAndroidFileOperations() {
                           confirmText: '确定'
                         });
                       }
-                    } finally {
-                      // 关闭资源
-                      try {
-                        if (reader) reader.close();
-                        if (inputStream) inputStream.close();
-                      } catch (closeError) {
-                        console.error('关闭输入流错误:', closeError);
-                      }
+                    } else {
+                      console.error('无法打开输入流');
+                      uni.showToast({
+                        title: '无法打开文件',
+                        icon: 'none'
+                      });
+                      tryReadDownloadDir();
                     }
-                  } else {
-                    console.error('无法打开输入流');
-                    uni.showToast({
-                      title: '无法打开文件',
-                      icon: 'none'
-                    });
-                    tryReadDownloadDir();
+                  } finally {
+                    // 修改关闭资源的方式，防止错误
+                    try {
+                      if (reader) {
+                        try {
+                          reader.close();
+                        } catch (readerError) {
+                          console.error('关闭读取器失败:', readerError);
+                        }
+                      }
+                      
+                      if (inputStream) {
+                        try {
+                          // 使用Java方式关闭流
+                          plus.android.invoke(inputStream, "close");
+                        } catch (streamError) {
+                          console.error('关闭输入流失败:', streamError);
+                        }
+                      }
+                    } catch (closeError) {
+                      console.error('关闭资源失败:', closeError);
+                    }
                   }
                 } catch (e) {
                   console.error('读取文件失败:', e);
@@ -430,19 +460,22 @@ function initAndroidFileOperations() {
                   
                   const ContentResolver = plus.android.importClass('android.content.ContentResolver');
                   const resolver = main.getContentResolver();
-                  const inputStream = resolver.openInputStream(uri);
+                  let inputStream = null;
+                  let reader = null;
                   
-                  if (inputStream) {
-                    const BufferedReader = plus.android.importClass('java.io.BufferedReader');
-                    const InputStreamReader = plus.android.importClass('java.io.InputStreamReader');
-                    const reader = new BufferedReader(new InputStreamReader(inputStream, 'UTF-8'));
+                  try {
+                    inputStream = resolver.openInputStream(uri);
                     
-                    const StringBuilder = plus.android.importClass('java.lang.StringBuilder');
-                    const sb = new StringBuilder();
-                    let line;
-                    
-                    try {
-                      while ((line = reader.readLine()) != null) {
+                    if (inputStream) {
+                      const BufferedReader = plus.android.importClass('java.io.BufferedReader');
+                      const InputStreamReader = plus.android.importClass('java.io.InputStreamReader');
+                      reader = new BufferedReader(new InputStreamReader(inputStream, 'UTF-8'));
+                      
+                      const StringBuilder = plus.android.importClass('java.lang.StringBuilder');
+                      const sb = new StringBuilder();
+                      let line;
+                      
+                      while ((line = reader.readLine()) !== null) {
                         sb.append(line);
                       }
                       
@@ -461,22 +494,36 @@ function initAndroidFileOperations() {
                           confirmText: '确定'
                         });
                       }
-                    } finally {
-                      // 关闭资源
-                      try {
-                        if (reader) reader.close();
-                        if (inputStream) inputStream.close();
-                      } catch (closeError) {
-                        console.error('关闭输入流错误:', closeError);
-                      }
+                    } else {
+                      console.error('无法打开输入流');
+                      uni.showToast({
+                        title: '无法打开错题本文件',
+                        icon: 'none'
+                      });
+                      tryReadErrorBookDownloadDir();
                     }
-                  } else {
-                    console.error('无法打开输入流');
-                    uni.showToast({
-                      title: '无法打开错题本文件',
-                      icon: 'none'
-                    });
-                    tryReadErrorBookDownloadDir();
+                  } finally {
+                    // 修改关闭资源的方式，防止错误
+                    try {
+                      if (reader) {
+                        try {
+                          reader.close();
+                        } catch (readerError) {
+                          console.error('关闭读取器失败:', readerError);
+                        }
+                      }
+                      
+                      if (inputStream) {
+                        try {
+                          // 使用Java方式关闭流
+                          plus.android.invoke(inputStream, "close");
+                        } catch (streamError) {
+                          console.error('关闭输入流失败:', streamError);
+                        }
+                      }
+                    } catch (closeError) {
+                      console.error('关闭资源失败:', closeError);
+                    }
                   }
                 } catch (e) {
                   console.error('读取错题本文件失败:', e);
@@ -639,7 +686,7 @@ const exportData = () => {
         intent.putExtra(Intent.EXTRA_TITLE, fileName);
         
         try {
-          // 通过Activity启动文件保存对话框
+          // 通过Activity启动文件保存对话框，使用请求码2区分单词数据导出操作
           main.startActivityForResult(intent, 2);
           console.log('启动文件保存对话框');
         } catch (activityError) {
@@ -650,7 +697,7 @@ const exportData = () => {
             const DocumentsContract = plus.android.importClass('android.provider.DocumentsContract');
             const intent2 = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
             main.startActivityForResult(intent2, 3);
-            console.log('启动目录选择对话框');
+            console.log('启动目录选择对话框用于单词数据导出');
           } catch (treeError) {
             console.error('启动目录选择器失败:', treeError);
             
@@ -955,34 +1002,68 @@ const importData = () => {
     
     // 检查下载目录中是否有备份文件
     function hasBackupFilesInDownloads() {
-      const Context = plus.android.importClass('android.content.Context');
-      const Environment = plus.android.importClass('android.os.Environment');
-      const File = plus.android.importClass('java.io.File');
-      
-      // 获取下载目录
-      const downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-      
-      // 检查下载目录是否存在
-      if (!downloadDir.exists()) {
-        return false;
-      }
-      
-      // 列出所有下载目录中的文件
-      const files = downloadDir.listFiles();
-      if (!files || files.length === 0) {
-        return false;
-      }
-      
-      // 查找备份文件
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = file.getName();
-        if (fileName.startsWith('reciter_backup_') && fileName.endsWith('.json')) {
-          return true;
+      try {
+        // #ifdef APP-PLUS
+        if (uni.getSystemInfoSync().platform === 'android') {
+          try {
+            const Context = plus.android.importClass('android.content.Context');
+            const Environment = plus.android.importClass('android.os.Environment');
+            const File = plus.android.importClass('java.io.File');
+            
+            // 获取下载目录
+            const downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            
+            // 检查下载目录是否存在
+            if (!downloadDir) {
+              console.log('下载目录对象为null');
+              return false;
+            }
+            
+            if (!downloadDir.exists()) {
+              console.log('下载目录不存在');
+              return false;
+            }
+            
+            // 列出所有下载目录中的文件
+            const files = downloadDir.listFiles();
+            if (!files || files.length === 0) {
+              console.log('下载目录为空或无法列出文件');
+              return false;
+            }
+            
+            // 查找备份文件
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              if (!file) continue; // 跳过空文件对象
+              
+              try {
+                const fileName = file.getName();
+                if (fileName && fileName.startsWith('reciter_backup_') && fileName.endsWith('.json')) {
+                  return true;
+                }
+              } catch (nameError) {
+                console.error('获取文件名失败:', nameError);
+                // 继续检查下一个文件
+              }
+            }
+            
+            return false;
+          } catch (e) {
+            console.error('检查下载目录失败:', e);
+            return false;
+          }
         }
+        return false;
+        // #endif
+        
+        // 非APP-PLUS环境
+        // #ifndef APP-PLUS
+        return false;
+        // #endif
+      } catch (globalError) {
+        console.error('hasBackupFilesInDownloads全局错误:', globalError);
+        return false;
       }
-      
-      return false;
     }
     
     // 使用原生Intent打开文件选择器
@@ -994,23 +1075,9 @@ const importData = () => {
         const main = plus.android.runtimeMainActivity();
         // 使用ACTION_OPEN_DOCUMENT代替ACTION_GET_CONTENT，提供更好的文件选择体验
         const intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.setType('*/*'); // 允许选择所有类型，避免某些设备过滤问题
+        intent.setType('application/json'); // 直接设置为JSON类型
         
-        // 创建MIME类型数组
-        try {
-          // 注意：这里应该创建Java的String数组
-          const StringClass = plus.android.importClass('java.lang.String');
-          const mimeTypesArray = plus.android.newArray(StringClass, 2);
-          mimeTypesArray[0] = 'application/json';
-          mimeTypesArray[1] = 'text/plain';
-          
-          intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypesArray);
-        } catch (mimeError) {
-          console.error('设置MIME类型失败:', mimeError);
-          // 如果设置MIME类型失败，直接设置为JSON
-          intent.setType('application/json');
-        }
-        
+        // 不再使用MIME类型数组，避免plus.android.newArray的问题
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         
         try {
@@ -1155,12 +1222,31 @@ const importData = () => {
         } finally {
           // 确保所有资源都被关闭，顺序从内到外
           try {
-            if (br) br.close();
-            if (isr) isr.close();
-            if (fis) fis.close();
+            if (br) {
+              try {
+                br.close();
+              } catch (brCloseError) {
+                console.error('关闭BufferedReader错误:', brCloseError);
+              }
+            }
+            
+            if (isr) {
+              try {
+                isr.close();
+              } catch (isrCloseError) {
+                console.error('关闭InputStreamReader错误:', isrCloseError);
+              }
+            }
+            
+            if (fis) {
+              try {
+                plus.android.invoke(fis, "close");
+              } catch (fisCloseError) {
+                console.error('关闭FileInputStream错误:', fisCloseError);
+              }
+            }
           } catch (closeError) {
-            console.error('关闭输入流错误:', closeError);
-            // 不抛出关闭错误，继续执行
+            console.error('关闭资源错误:', closeError);
           }
         }
       } catch (e) {
@@ -1282,39 +1368,60 @@ const processImportedData = (dataStr) => {
       }
     }
     
-    // 验证导入数据的结构
-    if (!importedData.words || !Array.isArray(importedData.words)) {
-      throw new Error('数据格式不正确：缺少words数组字段');
+    // 处理单词数据 - 兼容多种格式
+    let wordList;
+    let wordCount = 0;
+    
+    // 检查不同的数据格式
+    if (Array.isArray(importedData)) {
+      // 直接是单词数组
+      wordList = importedData;
+      wordCount = wordList.length;
+      console.log('检测到直接数组格式的单词数据');
+    } else if (importedData.words && Array.isArray(importedData.words)) {
+      // 包含words属性的对象 (标准格式或Python脚本格式)
+      wordList = importedData.words;
+      wordCount = wordList.length;
+      console.log('检测到标准格式的单词数据，包含words字段');
+    } else {
+      throw new Error('数据格式不正确：找不到有效的单词数组');
+    }
+    
+    // 初步验证数据有效性
+    if (wordCount === 0) {
+      throw new Error('导入的单词列表为空');
+    }
+    
+    // 检查单词数据结构
+    const sampleWord = wordList[0];
+    if (!sampleWord.name) {
+      throw new Error('单词数据格式不正确：缺少name字段');
     }
     
     // 确认导入
     uni.showModal({
       title: '确认导入',
-      content: `发现${importedData.words.length}个单词数据，确定要导入吗？注意：导入将会覆盖已有的所有数据！`,
+      content: `发现${wordCount}个单词数据，确定要导入吗？注意：导入将会覆盖已有的所有数据！`,
       confirmText: '确认导入',
       cancelText: '取消',
       success: (modalRes) => {
         if (modalRes.confirm) {
-          // 直接覆盖现有数据，不再合并
-          uni.setStorageSync('reciter_words', JSON.stringify(importedData.words));
+          // 显示进度弹窗
+          importProgress.value = {
+            visible: true,
+            title: '导入单词数据',
+            currentStep: '准备导入...',
+            completedCount: 0,
+            totalCount: wordCount,
+            message: '正在检查数据完整性...',
+            showCancel: true,
+            importCancelled: false
+          };
           
-          // 可选：导入设置
-          if (importedData.settings) {
-            uni.setStorageSync('reciter_settings', JSON.stringify(importedData.settings));
-            // 重新加载设置
-            loadSettings();
-          }
-          
-          // 显示成功消息
-          uni.showToast({
-            title: '数据导入成功',
-            icon: 'success',
-            duration: 2000
-          });
-          
-          // 通知其他页面更新
-          uni.$emit('words-count-updated', { count: importedData.words.length });
-          uni.$emit('refreshWordList', { imported: true });
+          // 延迟执行导入，以便UI能够更新
+          setTimeout(() => {
+            performImport(wordList, importedData.settings || {});
+          }, 100);
         }
       }
     });
@@ -1325,6 +1432,114 @@ const processImportedData = (dataStr) => {
       content: parseError.message || '未知错误',
       showCancel: false,
       confirmText: '确定'
+    });
+  }
+};
+
+// 执行实际的导入操作
+const performImport = (wordList, settings) => {
+  try {
+    // 设置批处理大小，避免大数据集导致UI卡顿
+    const batchSize = 100;
+    const totalItems = wordList.length;
+    const batches = Math.ceil(totalItems / batchSize);
+    
+    let processedItems = 0;
+    let currentBatch = 0;
+    
+    // 检查并修复单词数据
+    let normalizedWordList = [];
+    
+    // 使用setTimeout进行分批处理，确保UI可以更新
+    const processBatch = () => {
+      // 检查是否取消导入
+      if (importProgress.value.importCancelled) {
+        console.log('导入已被用户取消');
+        return;
+      }
+      
+      if (currentBatch < batches) {
+        const startIdx = currentBatch * batchSize;
+        const endIdx = Math.min(startIdx + batchSize, totalItems);
+        
+        // 更新进度信息
+        importProgress.value.currentStep = `正在处理第 ${currentBatch + 1}/${batches} 批...`;
+        importProgress.value.completedCount = processedItems;
+        
+        // 处理每个单词
+        for (let i = startIdx; i < endIdx; i++) {
+          const word = wordList[i];
+          
+          // 标准化单词数据
+          const normalizedWord = {
+            id: word.id || Date.now() + i, // 确保有唯一ID
+            name: word.name || '',
+            pos: word.pos || '',
+            meaning: word.meaning || '',
+            usages: Array.isArray(word.usages) ? word.usages : [],
+            examples: Array.isArray(word.examples) ? word.examples : [],
+            notes: Array.isArray(word.notes) ? word.notes : [],
+            relatedWords: Array.isArray(word.relatedWords) ? word.relatedWords : []
+          };
+          
+          // 添加到标准化列表
+          normalizedWordList.push(normalizedWord);
+          
+          // 更新进度
+          processedItems++;
+          if (processedItems % 10 === 0 || processedItems === totalItems) {
+            importProgress.value.completedCount = processedItems;
+          }
+        }
+        
+        // 处理下一批
+        currentBatch++;
+        setTimeout(processBatch, 10); // 小延迟让UI有时间更新
+      } else {
+        // 所有批次处理完毕
+        importProgress.value.currentStep = '正在保存数据...';
+        importProgress.value.completedCount = totalItems;
+        
+        // 短暂延迟，让用户看到100%完成的状态
+        setTimeout(() => {
+          // 保存标准化后的单词列表
+          uni.setStorageSync('reciter_words', JSON.stringify(normalizedWordList));
+          
+          // 保存设置
+          if (Object.keys(settings).length > 0) {
+            uni.setStorageSync('reciter_settings', JSON.stringify(settings));
+            // 重新加载设置
+            loadSettings();
+          }
+          
+          // 隐藏进度弹窗
+          importProgress.value.visible = false;
+          
+          // 显示成功消息
+          uni.showToast({
+            title: '数据导入成功',
+            icon: 'success',
+            duration: 2000
+          });
+          
+          // 通知其他页面更新
+          uni.$emit('words-count-updated', { count: normalizedWordList.length });
+          uni.$emit('refreshWordList', { imported: true });
+        }, 500);
+      }
+    };
+    
+    // 开始处理第一批
+    processBatch();
+  } catch (error) {
+    // 导入过程中出错
+    importProgress.value.visible = false;
+    console.error('导入过程出错:', error);
+    
+    uni.showModal({
+      title: '导入失败',
+      content: error.message || '导入过程中出现错误',
+      showCancel: false
     });
   }
 };
@@ -1417,6 +1632,12 @@ function hasErrorBookBackupFilesInDownloads() {
       // 获取下载目录
       const downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
       
+      // 检查下载目录是否为null
+      if (!downloadDir) {
+        console.log('下载目录对象为null');
+        return false;
+      }
+      
       // 检查下载目录是否存在
       if (!downloadDir.exists()) {
         return false;
@@ -1431,9 +1652,17 @@ function hasErrorBookBackupFilesInDownloads() {
       // 查找错题本备份文件
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileName = file.getName();
-        if (fileName.startsWith('reciter_errorbook_backup_') && fileName.endsWith('.json')) {
-          return true;
+        // 检查文件对象是否为null
+        if (!file) continue;
+        
+        try {
+          const fileName = file.getName();
+          if (fileName && fileName.startsWith('reciter_errorbook_backup_') && fileName.endsWith('.json')) {
+            return true;
+          }
+        } catch (nameError) {
+          console.error('获取文件名失败:', nameError);
+          // 继续检查下一个文件
         }
       }
     } catch (e) {
@@ -1461,22 +1690,7 @@ function openErrorBookFileChooser() {
       const main = plus.android.runtimeMainActivity();
       // 使用ACTION_OPEN_DOCUMENT代替ACTION_GET_CONTENT，提供更好的文件选择体验
       const intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      intent.setType('*/*'); // 允许选择所有类型，避免某些设备过滤问题
-      
-      // 创建MIME类型数组
-      try {
-        // 注意：这里应该创建Java的String数组
-        const StringClass = plus.android.importClass('java.lang.String');
-        const mimeTypesArray = plus.android.newArray(StringClass, 2);
-        mimeTypesArray[0] = 'application/json';
-        mimeTypesArray[1] = 'text/plain';
-        
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypesArray);
-      } catch (mimeError) {
-        console.error('设置MIME类型失败:', mimeError);
-        // 如果设置MIME类型失败，直接设置为JSON
-        intent.setType('application/json');
-      }
+      intent.setType('application/json'); // 直接设置为JSON类型
       
       intent.addCategory(Intent.CATEGORY_OPENABLE);
       
@@ -1508,6 +1722,13 @@ function tryReadErrorBookDownloadDir() {
       
       // 获取下载目录
       const downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+      
+      // 检查下载目录是否为null
+      if (!downloadDir) {
+        console.log('下载目录对象为null');
+        throw new Error('下载目录不可用');
+      }
+      
       console.log('下载目录路径:', downloadDir.getAbsolutePath());
       
       // 检查下载目录是否存在
@@ -1527,13 +1748,21 @@ function tryReadErrorBookDownloadDir() {
       const backupFiles = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileName = file.getName();
-        if (fileName.startsWith('reciter_errorbook_backup_') && fileName.endsWith('.json')) {
-          backupFiles.push({
-            name: fileName,
-            path: file.getAbsolutePath(),
-            lastModified: file.lastModified()
-          });
+        // 检查文件对象是否为null
+        if (!file) continue;
+        
+        try {
+          const fileName = file.getName();
+          if (fileName && fileName.startsWith('reciter_errorbook_backup_') && fileName.endsWith('.json')) {
+            backupFiles.push({
+              name: fileName,
+              path: file.getAbsolutePath(),
+              lastModified: file.lastModified()
+            });
+          }
+        } catch (nameError) {
+          console.error('获取文件名失败:', nameError);
+          // 继续处理下一个文件
         }
       }
       
@@ -1586,8 +1815,17 @@ function readSelectedErrorBookFile(filePath) {
       console.log('准备读取错题本文件:', filePath);
       const File = plus.android.importClass('java.io.File');
       
+      // 检查路径是否有效
+      if (!filePath) {
+        throw new Error('文件路径无效');
+      }
+      
       // 首先检查文件是否存在
       const file = new File(filePath);
+      if (!file) {
+        throw new Error('无法创建文件对象');
+      }
+      
       if (!file.exists()) {
         throw new Error('文件不存在');
       }
@@ -1607,8 +1845,19 @@ function readSelectedErrorBookFile(filePath) {
       
       try {
         fis = new FileInputStream(file);
+        if (!fis) {
+          throw new Error('无法创建文件输入流');
+        }
+        
         isr = new InputStreamReader(fis, 'UTF-8');
+        if (!isr) {
+          throw new Error('无法创建输入流读取器');
+        }
+        
         br = new BufferedReader(isr);
+        if (!br) {
+          throw new Error('无法创建缓冲读取器');
+        }
         
         // 一次性读取整个文件
         const StringBuilder = plus.android.importClass('java.lang.StringBuilder');
@@ -1620,7 +1869,7 @@ function readSelectedErrorBookFile(filePath) {
         }
         const content = sb.toString();
         
-        console.log('文件内容长度:', content.length);
+        console.log('错题本文件内容长度:', content.length);
         
         if (content.length > 0) {
           processImportedErrorBookData(content);
@@ -1630,12 +1879,31 @@ function readSelectedErrorBookFile(filePath) {
       } finally {
         // 确保所有资源都被关闭，顺序从内到外
         try {
-          if (br) br.close();
-          if (isr) isr.close();
-          if (fis) fis.close();
+          if (br) {
+            try {
+              br.close();
+            } catch (brCloseError) {
+              console.error('关闭BufferedReader错误:', brCloseError);
+            }
+          }
+          
+          if (isr) {
+            try {
+              isr.close();
+            } catch (isrCloseError) {
+              console.error('关闭InputStreamReader错误:', isrCloseError);
+            }
+          }
+          
+          if (fis) {
+            try {
+              plus.android.invoke(fis, "close");
+            } catch (fisCloseError) {
+              console.error('关闭FileInputStream错误:', fisCloseError);
+            }
+          }
         } catch (closeError) {
-          console.error('关闭输入流错误:', closeError);
-          // 不抛出关闭错误，继续执行
+          console.error('关闭资源错误:', closeError);
         }
       }
     } catch (e) {
@@ -1766,8 +2034,7 @@ const importErrorBook = () => {
 // 处理导入的错题本数据
 const processImportedErrorBookData = (dataStr) => {
   try {
-    // 记录一下导入数据的长度，便于调试
-    console.log('导入错题本数据长度:', dataStr ? dataStr.length : 0);
+    console.log('错题本数据长度:', dataStr ? dataStr.length : 0);
     
     if (!dataStr || dataStr.trim() === '') {
       throw new Error('导入数据为空');
@@ -1778,8 +2045,7 @@ const processImportedErrorBookData = (dataStr) => {
     try {
       importedData = JSON.parse(dataStr);
     } catch (jsonError) {
-      console.error('JSON解析错误:', jsonError, '尝试解析前100个字符:', dataStr.substring(0, 100));
-      console.log('尝试移除BOM标记后再解析');
+      console.error('JSON解析错误:', jsonError);
       // 移除可能的BOM标记
       const dataWithoutBOM = dataStr.replace(/^\uFEFF/, '');
       
@@ -1792,20 +2058,127 @@ const processImportedErrorBookData = (dataStr) => {
     }
     
     // 验证导入数据的结构
-    if (!importedData.errors || !Array.isArray(importedData.errors)) {
-      throw new Error('数据格式不正确：缺少errors数组字段');
+    let errorBookData;
+    if (Array.isArray(importedData)) {
+      // 直接是数组格式
+      errorBookData = importedData;
+    } else if (importedData.errors && Array.isArray(importedData.errors)) {
+      // 包含errors字段的对象
+      errorBookData = importedData.errors;
+    } else {
+      throw new Error('数据格式不正确：错题本数据需要是数组格式');
     }
     
     // 确认导入
     uni.showModal({
       title: '确认导入',
-      content: `发现${importedData.errors.length}条错题记录，确定要导入吗？注意：导入将会覆盖已有的所有错题本数据！`,
+      content: `发现${errorBookData.length}条错题记录，确定要导入吗？注意：导入将会覆盖已有的所有错题本数据！`,
       confirmText: '确认导入',
       cancelText: '取消',
       success: (modalRes) => {
         if (modalRes.confirm) {
-          // 直接覆盖现有数据
-          uni.setStorageSync('reciter_errorbook', JSON.stringify(importedData.errors));
+          // 显示进度弹窗
+          importProgress.value = {
+            visible: true,
+            title: '导入错题本数据',
+            currentStep: '准备导入...',
+            completedCount: 0,
+            totalCount: errorBookData.length,
+            message: '',
+            showCancel: true,
+            importCancelled: false
+          };
+          
+          // 延迟执行导入，以便UI能够更新
+          setTimeout(() => {
+            performErrorBookImport(errorBookData);
+          }, 100);
+        }
+      }
+    });
+  } catch (parseError) {
+    console.error('解析导入错题本数据失败:', parseError);
+    uni.showModal({
+      title: '导入错题本数据失败',
+      content: parseError.message || '未知错误',
+      showCancel: false,
+      confirmText: '确定'
+    });
+  }
+};
+
+// 执行实际的错题本导入操作
+const performErrorBookImport = (errorBookData) => {
+  try {
+    // 设置批处理大小
+    const batchSize = 50;
+    const totalItems = errorBookData.length;
+    const batches = Math.ceil(totalItems / batchSize);
+    
+    let processedItems = 0;
+    let currentBatch = 0;
+    
+    // 标准化后的错题数据
+    let normalizedErrorList = [];
+    
+    // 使用setTimeout进行分批处理
+    const processBatch = () => {
+      // 检查是否取消导入
+      if (importProgress.value.importCancelled) {
+        console.log('导入已被用户取消');
+        return;
+      }
+      
+      if (currentBatch < batches) {
+        const startIdx = currentBatch * batchSize;
+        const endIdx = Math.min(startIdx + batchSize, totalItems);
+        
+        // 更新进度信息
+        importProgress.value.currentStep = `正在处理第 ${currentBatch + 1}/${batches} 批...`;
+        importProgress.value.completedCount = processedItems;
+        
+        // 处理每个错题
+        for (let i = startIdx; i < endIdx; i++) {
+          const error = errorBookData[i];
+          
+          // 标准化错题数据，兼容多种格式
+          const normalizedError = {
+            id: error.id || generateUUID(),
+            // 兼容旧版格式 (title/desc) 和新版 (content/translation)
+            content: error.content || error.title || '',
+            translation: error.translation || error.desc || '',
+            word: error.word || '',
+            note: error.note || '',
+            // 日期字段兼容处理
+            createTime: error.createTime || error.date || new Date().toISOString(),
+            updateTime: error.updateTime || null
+          };
+          
+          // 添加到标准化列表
+          normalizedErrorList.push(normalizedError);
+          
+          // 更新进度
+          processedItems++;
+          if (processedItems % 10 === 0 || processedItems === totalItems) {
+            importProgress.value.completedCount = processedItems;
+          }
+        }
+        
+        // 处理下一批
+        currentBatch++;
+        setTimeout(processBatch, 10);
+      } else {
+        // 所有批次处理完毕
+        importProgress.value.currentStep = '正在保存数据...';
+        importProgress.value.completedCount = totalItems;
+        
+        // 短暂延迟，让用户看到100%完成的状态
+        setTimeout(() => {
+          // 保存到本地存储
+          uni.setStorageSync('reciter_errorbook', JSON.stringify(normalizedErrorList));
+          
+          // 隐藏进度弹窗
+          importProgress.value.visible = false;
           
           // 显示成功消息
           uni.showToast({
@@ -1814,23 +2187,36 @@ const processImportedErrorBookData = (dataStr) => {
             duration: 2000
           });
           
-          // 通知其他页面更新错题本
+          // 通知错题本页面更新
           uni.$emit('refresh-errorbook', { imported: true });
-          
-          // 通知错题数量更新
-          uni.$emit('errors-count-updated', { count: importedData.errors.length });
-        }
+          // 通知首页更新错题数量
+          uni.$emit('errorbook-count-updated', { count: normalizedErrorList.length });
+        }, 500);
       }
-    });
-  } catch (parseError) {
-    console.error('解析导入错题本数据失败:', parseError);
+    };
+    
+    // 开始处理第一批
+    processBatch();
+  } catch (error) {
+    // 导入过程中出错
+    importProgress.value.visible = false;
+    console.error('错题本导入过程出错:', error);
+    
     uni.showModal({
-      title: '导入错题本失败',
-      content: parseError.message || '未知错误',
-      showCancel: false,
-      confirmText: '确定'
+      title: '导入失败',
+      content: error.message || '导入过程中出现错误',
+      showCancel: false
     });
   }
+};
+
+// 生成UUID函数
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 };
 
 // 错题本导出功能
@@ -1981,6 +2367,29 @@ const exportErrorBook = () => {
     });
   }
 };
+
+// 取消导入
+const cancelImport = () => {
+  importProgress.value.importCancelled = true;
+  importProgress.value.visible = false;
+  
+  uni.showToast({
+    title: '导入已取消',
+    icon: 'none'
+  });
+};
+
+// 导入进度状态
+const importProgress = ref({
+  visible: false,
+  title: '导入进度',
+  currentStep: '处理中...',
+  completedCount: 0,
+  totalCount: 0,
+  message: '',
+  showCancel: true,
+  importCancelled: false
+});
 </script>
 
 <style scoped>
